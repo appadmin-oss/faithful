@@ -59,6 +59,30 @@ Judges a page on its own, at a phone and a desktop width, and reports each fault
 `fixtures/audit/` holds a page with every fault planted and a plain, deliberate page that must
 stay clean; both are run on every test.
 
+## Refactoring or redesigning? Prove nothing was lost
+
+```
+$ npx @faithful/cli parity --before http://localhost:3000 --after http://localhost:3001
+faithful FAIL 3E 2W · parity · parity@1
+F1 E lost: link "Delete account" → /account/delete is gone
+F2 E lost: field "email" (Email) is gone from the form; is it "emailAddress"? The server reads the name
+F3 E changed: a form now sends to /subscribe, not /newsletter
+F4 W lost: the contentinfo landmark is gone
+F5 W renamed: link "My orders" is now "Your orders": confirm it is the same action
+```
+
+Compares what users can DO before and after a refactor or a complete redesign: every link and
+button (by role, accessible name and target), every form (where it sends, how, and the field
+names the server reads), landmarks, routes (two URLs are crawled one level, so a page that
+404s after the change is caught) and new script errors. No pixels and no DOM structure are
+compared, so a full re-skin raises nothing. Controls are matched across changed markup by
+target, then name, then a close name; a rename is shown for confirmation, never passed
+silently. Before trusting its answer it plants a loss in a copy of the old page and checks it
+is caught; when it cannot be, the run says "inconclusive".
+
+That is `fixtures/parity/`: a re-skin that passes, and the same re-skin with four planted
+losses.
+
 ## What it reads
 
 | Design | How |
@@ -102,8 +126,8 @@ writes `faithful.config.json`, an Agent Skill at `.agents/skills/faithful/SKILL.
 Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf…), and a five-line block in
 `AGENTS.md`, because a skill does not always load itself.
 
-Or attach the MCP server: five tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
-`faithful_explain`, `faithful_guard`), each returning the same compact lines plus structured
+Or attach the MCP server: six tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
+`faithful_parity`, `faithful_explain`, `faithful_guard`), each returning the same compact lines plus structured
 content.
 
 ```json
@@ -119,6 +143,7 @@ kind rather than once per finding, and the full result stays in `.faithful/last.
 ```
 faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
 faithful audit <url|file> [--viewports …]  judge a page with no design
+faithful parity --before <a> --after <b> [--pages /,/x]  after a refactor or redesign: nothing lost
 faithful outline <design|folder>       what a design contains, in a few lines
 faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)
 faithful explain [F3|--all]            detail of a finding from the last run

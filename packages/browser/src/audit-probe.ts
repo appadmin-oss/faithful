@@ -259,17 +259,67 @@ export function auditProbe(): AuditFacts {
       .replace(/\s+/g, ' ')
       .trim();
   const controls: AuditFacts['controls'] = all
-    .filter(
-      (e) => e.matches('a[href],button,input[type=submit],input[type=button],[role=button],[role=link]') && shown(e),
-    )
-    .slice(0, 400)
+    .filter((e) => e.matches('a[href],button,input[type=submit],input[type=button],[role=button],[role=link]'))
+    .slice(0, 600)
     .map((e) => {
       const role: 'link' | 'button' = e.matches('a[href],[role=link]') ? 'link' : 'button';
-      const c: AuditFacts['controls'][number] = { sel: path(e), role, name: nameOf(e).slice(0, 80) };
+      // A hidden control has no rendered text; its DOM text is still its name.
+      const name = (nameOf(e) || (e.textContent ?? '').replace(/\s+/g, ' ').trim()).slice(0, 80);
+      const c: AuditFacts['controls'][number] = { sel: path(e), role, name, visible: shown(e) };
       const href = e.getAttribute('href');
       if (href) c.href = href;
       return c;
     });
+  const labelOf = (el: Element) => {
+    const id = el.getAttribute('id');
+    const lab = (id && document.querySelector(`label[for="${CSS.escape(id)}"]`)) || el.closest('label');
+    return (el.getAttribute('aria-label') || lab?.textContent || el.getAttribute('placeholder') || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 60);
+  };
+  const forms: AuditFacts['forms'] = Array.from(document.forms)
+    .slice(0, 30)
+    .map((form) => ({
+      sel: path(form),
+      action: form.getAttribute('action') ?? '',
+      method: (form.getAttribute('method') ?? 'get').toLowerCase(),
+      fields: Array.from(form.elements)
+        .filter(
+          (el) =>
+            el.matches('input,select,textarea') && !/^(submit|button|reset|image)$/.test((el as HTMLInputElement).type),
+        )
+        .map((el) => ({
+          name: el.getAttribute('name') ?? '',
+          type: el.tagName === 'INPUT' ? (el as HTMLInputElement).type || 'text' : el.tagName.toLowerCase(),
+          required: (el as HTMLInputElement).required,
+          label: labelOf(el),
+        })),
+      submits: Array.from(form.querySelectorAll('button:not([type=button]):not([type=reset]),input[type=submit]')).map(
+        (b) => nameOf(b) || (b.textContent ?? '').trim(),
+      ),
+    }));
+  // Header and footer are landmarks only at the top level, not inside an article or section.
+  const LANDMARK: Record<string, string> = {
+    NAV: 'navigation',
+    MAIN: 'main',
+    ASIDE: 'complementary',
+    SEARCH: 'search',
+  };
+  const landmarkOf = (e: Element): string => {
+    const role = e.getAttribute('role');
+    if (role) return role;
+    if (e.tagName === 'HEADER' || e.tagName === 'FOOTER')
+      return e.closest('article,aside,main,nav,section') ? '' : e.tagName === 'HEADER' ? 'banner' : 'contentinfo';
+    return LANDMARK[e.tagName] ?? '';
+  };
+  const landmarks = [
+    ...new Set(
+      all
+        .map(landmarkOf)
+        .filter((r) => /^(banner|navigation|main|contentinfo|complementary|search|form|region)$/.test(r)),
+    ),
+  ].sort();
   const headings = Array.from(document.querySelectorAll('h1,h2,h3,h4,h5,h6'))
     .filter((e) => shown(e) && !ariaHidden(e))
     .slice(0, 200)
@@ -424,6 +474,7 @@ export function auditProbe(): AuditFacts {
 
   return {
     viewport: { width: W, height: H },
+    url: location.href,
     scrollWidth,
     overflow,
     clipped,
@@ -434,6 +485,8 @@ export function auditProbe(): AuditFacts {
     paragraphs,
     targets,
     controls,
+    forms,
+    landmarks,
     headings,
     fontSizes,
     texts,

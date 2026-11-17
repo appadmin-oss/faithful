@@ -10,6 +10,7 @@ import { Renderer } from '@faithful/browser';
 import {
   type Adapter,
   checkConformity,
+  compareParity,
   compareScreens,
   countViolations,
   DEFAULT_CONFIG,
@@ -17,6 +18,7 @@ import {
   inventoryOf,
   langOf,
   mergeViewports,
+  normHref,
   pickAdapter,
   type ReadContext,
   type RunResult,
@@ -26,6 +28,7 @@ import {
   type SourceInput,
   scanFile,
   scoreAudit,
+  selfCheck,
   summarise,
   type Violation,
 } from '@faithful/core';
@@ -395,6 +398,84 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
       warnings: [] as string[],
     };
     const run = summarise(results, provenance, 'audit', 0);
+    await save(run, o.cwd);
+    return run;
+  } finally {
+    await session.close();
+  }
+}
+
+// ── Parity: the same product after a refactor or a redesign ──────────────────
+
+export interface ParityOptions {
+  before: string;
+  after: string;
+  /** Paths to compare on both, e.g. ["/", "/pricing"]. Default: the before page plus the same-origin pages it links to. */
+  pages?: string[];
+  maxPages?: number;
+  viewports?: string;
+  config?: FaithfulConfig;
+  cwd?: string;
+}
+
+/**
+ * Compare what users can DO on BEFORE and AFTER: controls, forms, landmarks, routes, script
+ * errors. Two URLs are crawled one level from the before page, so a route that answered
+ * before and 404s after is caught; two files are one page each.
+ */
+export async function parity(o: ParityOptions): Promise<RunResult> {
+  const cfg = o.config ?? (await loadConfig(o.cwd));
+  const session = new Session(cfg);
+  const cwd = o.cwd ?? process.cwd();
+  const targetOf = async (s: string, path?: string) =>
+    isUrl(s)
+      ? { url: path ? new URL(path, s).href : s }
+      : { html: await readFile(resolve(cwd, s), 'utf8'), baseDir: resolve(cwd, s, '..') };
+  try {
+    const vps = parseViewports(o.viewports ?? '1280x800', cfg.viewports);
+    const browser = await session.browser();
+    const results: ScreenResult[] = [];
+    const urls = isUrl(o.before) && isUrl(o.after);
+    for (const vp of vps) {
+      const first = await browser.audit(await targetOf(o.before), vp);
+      let pages: (string | undefined)[] = [undefined];
+      if (urls) {
+        const linked = first.controls
+          .map((c) => (c.href ? normHref(c.href, first.url) : ''))
+          .filter((h) => h.startsWith('/') && !h.includes('#'));
+        const start = new URL(o.before).pathname;
+        pages = [...new Set([start, ...(o.pages ?? linked)])].slice(0, o.maxPages ?? 12);
+      }
+      for (const path of pages) {
+        const b =
+          path === undefined || path === new URL(isUrl(o.before) ? o.before : 'http://x/').pathname
+            ? first
+            : await browser.audit(await targetOf(o.before, path), vp);
+        if ((b.runtime?.status ?? 200) >= 400) continue;
+        const a = await browser.audit(await targetOf(o.after, path), vp);
+        const r = compareParity(b, a, `${path ?? 'page'}@${vp.width}`);
+        const check = selfCheck(b);
+        if (!check.ok)
+          r.findings.push({
+            kind: 'unmeasured',
+            severity: 'warn',
+            detail: `inconclusive for ${path ?? 'this page'}: ${check.reason}`,
+            screen: r.screen,
+            viewport: r.viewport,
+          });
+        results.push(r);
+      }
+    }
+    const provenance = {
+      adapter: 'parity',
+      adapterVersion: '0.1.0',
+      format: 'parity@1',
+      tier: 'rendered' as const,
+      confidence: 1,
+      source: `${o.before} → ${o.after}`,
+      warnings: [] as string[],
+    };
+    const run = summarise(results, provenance, 'parity', 0);
     await save(run, o.cwd);
     return run;
   } finally {

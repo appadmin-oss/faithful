@@ -37,7 +37,7 @@ function client(cwd: string) {
 }
 
 describe('faithful-mcp over stdio', () => {
-  it('lists five tools and answers a verify, an outline, an explain and a guard', async () => {
+  it('lists six tools and answers a verify, an outline, an explain and a guard', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'faithful-mcp-'));
     const page = (h: string, c: string) =>
       `<!doctype html><html><body style="margin:0;font:16px sans-serif"><h1 style="margin:40px;color:${c}">${h}</h1><p style="margin:0 40px">Cancel any time.</p></body></html>`;
@@ -60,6 +60,7 @@ describe('faithful-mcp over stdio', () => {
         'faithful_explain',
         'faithful_guard',
         'faithful_outline',
+        'faithful_parity',
         'faithful_verify',
       ]);
       // Every description is paid for on every turn of every session: keep them short.
@@ -67,7 +68,7 @@ describe('faithful-mcp over stdio', () => {
         (n: number, t: { description: string }) => n + t.description.split(/\s+/).length,
         0,
       );
-      expect(words).toBeLessThan(150);
+      expect(words).toBeLessThan(180);
 
       const v = await c.call('tools/call', {
         name: 'faithful_verify',

@@ -26,6 +26,7 @@ import {
   loadConfig,
   OUT_DIR,
   outlineAny,
+  parity,
   parseViewports,
   readDesign,
   Session,
@@ -37,6 +38,7 @@ const HELP = `faithful — prove a build matches its design
 
   faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
   faithful audit <url|file> [--viewports …] judge a page with no design: layout faults, readability, AI-slop tells
+  faithful parity --before <a> --after <b>  after a refactor or redesign: can users still do everything they could?
   faithful outline <design|folder>         what a design contains, in a few lines
   faithful spec <design> [--out file]      the design as a Faithful spec (for design agents to ship)
   faithful explain [F3|--all]              detail of a finding from the last run
@@ -57,6 +59,9 @@ async function main(argv: string[]): Promise<number> {
     allowPositionals: true,
     options: {
       build: { type: 'string', short: 'b' },
+      before: { type: 'string' },
+      after: { type: 'string' },
+      pages: { type: 'string' },
       viewports: { type: 'string', short: 'v' },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
@@ -92,6 +97,23 @@ async function main(argv: string[]): Promise<number> {
       const target = pos[0];
       if (!target) throw new FaithfulError('usage: faithful audit <url|file> [--viewports 375x812,1440x900]');
       const run = await audit({ target, config: cfg, ...(v.viewports ? { viewports: v.viewports } : {}) });
+      console.log(
+        v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
+      );
+      return run.pass ? 0 : 1;
+    }
+    case 'parity': {
+      const before = v.before ?? pos[0];
+      const after = v.after ?? pos[1];
+      if (!before || !after)
+        throw new FaithfulError('usage: faithful parity --before <url|file> --after <url|file> [--pages /,/pricing]');
+      const run = await parity({
+        before,
+        after,
+        config: cfg,
+        ...(v.viewports ? { viewports: v.viewports } : {}),
+        ...(v.pages ? { pages: v.pages.split(',').map((p) => p.trim()) } : {}),
+      });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
       );

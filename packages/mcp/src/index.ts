@@ -1,5 +1,5 @@
 /**
- * Faithful as an MCP server. Five tools, each a thin shell over the same function the CLI
+ * Faithful as an MCP server. Six tools, each a thin shell over the same function the CLI
  * calls, so an agent gets the same answer whichever door it uses.
  *
  * Token budget is the design constraint here as everywhere: every tool's text is the compact
@@ -21,6 +21,7 @@ import {
   loadConfig,
   OUT_DIR,
   outlineAny,
+  parity,
   verify,
 } from '@faithful/cli';
 import { explain, formatCompact, formatText } from '@faithful/core';
@@ -111,6 +112,35 @@ export function createServer(cwd = process.cwd()): McpServer {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
           structuredContent: formatCompact(run, max ?? 8),
         };
+      }),
+  );
+
+  server.registerTool(
+    'faithful_parity',
+    {
+      title: 'Check a refactor or redesign kept every function',
+      description:
+        'Compare BEFORE and AFTER builds (URLs or HTML files) on what users can do: links, buttons, form fields, landmarks, routes, script errors. Looks are ignored. Run after every refactor step.',
+      inputSchema: z.object({
+        before: z.string(),
+        after: z.string(),
+        pages: z
+          .array(z.string())
+          .optional()
+          .describe('Paths to compare; default: the before page and the pages it links to'),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ before, after, pages }) =>
+      guarded(async () => {
+        const run = await parity({
+          before,
+          after,
+          cwd,
+          config: await loadConfig(cwd),
+          ...(pages?.length ? { pages } : {}),
+        });
+        return { ...text(formatText(run, 8, `${OUT_DIR}/last.json`)), structuredContent: formatCompact(run, 8) };
       }),
   );
 

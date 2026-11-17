@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Bookshop — redesigned</title>
+<style>
+  :root{--ink:#1b1b1b;--ground:#faf7f0;--accent:#8a3b12}
+  body{margin:0;background:var(--ground);color:var(--ink);font:17px/1.6 Georgia,serif}
+  .top{display:grid;grid-template-columns:1fr auto;padding:16px 24px;border-bottom:1px solid #ddd}
+  .links{display:flex;gap:20px}
+  .links a{color:var(--ink)}
+  .hero{padding:48px 24px;max-width:40rem}
+  .row{display:flex;gap:8px;align-items:end;margin:12px 0}
+  .go{background:var(--accent);color:#fff;border:0;border-radius:4px;padding:12px 18px}
+</style></head>
+<body>
+<header class="top"><span>Bookshop</span><nav class="links" aria-label="Main">
+  <a href="/books">Books</a><a href="/">Home</a><a href="/orders/">Your orders</a><a href="/account/delete">Delete account</a>
+</nav></header>
+<main class="hero">
+  <h1>Your next good book</h1>
+  <form class="row" action="/search" method="get"><div><label for="search">Search</label><input id="search" name="q" required></div><button class="go">Search</button></form>
+  <section aria-label="Newsletter">
+    <form class="row" action="/newsletter" method="post">
+      <div><label for="mail">Email</label><input id="mail" type="email" name="email" required></div>
+      <div><label><input type="checkbox" name="weekly"> Weekly digest</label></div>
+      <button class="go">Subscribe</button>
+    </form>
+  </section>
+  <button type="button" class="go">Add to basket</button>
+</main>
+<footer><a href="/privacy">Privacy</a></footer>
+</body></html>

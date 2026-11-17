@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Bookshop — before</title>
+<style>body{font-family:Arial,sans-serif;margin:20px} nav a{margin-right:12px} .btn{background:#06c;color:#fff;padding:8px 12px;border:0}</style></head>
+<body>
+<header><nav>
+  <a href="/">Home</a>
+  <a href="/books">Books</a>
+  <a href="/orders">My orders</a>
+  <a href="/account/delete">Delete account</a>
+</nav></header>
+<main>
+  <h1>Find your next book</h1>
+  <form action="/search" method="get"><label for="q">Search</label> <input id="q" name="q" required><button class="btn">Search</button></form>
+  <form action="/newsletter" method="post">
+    <label for="em">Email</label> <input id="em" type="email" name="email" required>
+    <label><input type="checkbox" name="weekly"> Weekly</label>
+    <button class="btn">Subscribe</button>
+  </form>
+  <button type="button" class="btn" onclick="this.textContent='Added'">Add to basket</button>
+</main>
+<footer><a href="/privacy">Privacy</a></footer>
+</body></html>

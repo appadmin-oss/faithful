@@ -1,8 +1,10 @@
 /** What `faithful audit` reads off a rendered page (measured in the page by @faithful/browser). */
 export interface AuditFacts {
   viewport: { width: number; height: number };
+  /** The page's own address, for resolving links. */
+  url: string;
   /** Filled by the renderer, not the page: script errors and requests that failed. */
-  runtime?: { errors: string[]; failed: { url: string; status: number }[] };
+  runtime?: { errors: string[]; failed: { url: string; status: number }[]; status?: number };
   scrollWidth: number;
   /** Elements that first cross the right edge, when the page scrolls sideways. */
   overflow: { sel: string; right: number; text: string }[];
@@ -17,8 +19,21 @@ export interface AuditFacts {
   invisible: { sel: string; text: string }[];
   paragraphs: { sel: string; cpl: number; lines: number; lineHeight: number; fontSize: number; centred: boolean }[];
   targets: { sel: string; text: string; w: number; h: number }[];
-  /** Links and buttons with what a screen reader would call them. */
-  controls: { sel: string; role: 'link' | 'button'; name: string; href?: string }[];
+  /**
+   * Links and buttons with what a screen reader would call them. Hidden ones are included and
+   * marked: a control inside a closed menu is still something the user can do.
+   */
+  controls: { sel: string; role: 'link' | 'button'; name: string; href?: string; visible: boolean }[];
+  /** Every form: where it sends, how, and the names the server will read. */
+  forms: {
+    sel: string;
+    action: string;
+    method: string;
+    fields: { name: string; type: string; required: boolean; label: string }[];
+    submits: string[];
+  }[];
+  /** ARIA landmark roles present (banner, navigation, main, contentinfo, search, …). */
+  landmarks: string[];
   headings: { sel: string; level: number; text: string }[];
   fontSizes: number[];
   texts: { sel: string; text: string }[];

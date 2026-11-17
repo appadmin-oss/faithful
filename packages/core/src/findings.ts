@@ -46,6 +46,9 @@ export const KINDS = {
   'type-scale': 'Use fewer font sizes, from one type scale.',
   wording: 'Say what happens or where it goes, one name per action, one capitalisation style, no shouting.',
   slop: 'A pattern typical of generated UI; replace it with a decision specific to this product.',
+  lost: 'Put it back: users could do this before and cannot now.',
+  changed: 'Check this was meant: it now goes or sends somewhere else.',
+  renamed: 'Confirm the new name is the same action; if it is, record it so the next run knows.',
   improved: 'The build departs from the design here and is measurably better; keep it and tell the designer.',
 } as const;
 

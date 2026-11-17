@@ -55,6 +55,15 @@ over text, sideways scroll, broken images, \`undefined\` on the page, readabilit
 and button wording, and the tells of generated UI. Fix every E; treat "reads as generated" as
 a design problem to solve, not a style to keep.
 
+## Refactoring or redesigning something that already works
+
+Record the BEFORE build first (a URL, or the built HTML), then after every step:
+\`npx @faithful/cli parity --before <old> --after <new>\` — every link, button, form field,
+landmark and route must still be there; looks are ignored. "renamed" needs your confirmation;
+"lost" and "changed" mean users can no longer do something they could. Improve freely — a
+redesign should be better than the design or code it replaces — but never drop a function
+silently.
+
 ## Before committing
 
 \`npx @faithful/cli guard\` — no new !important, raw colours or off-scale type. Existing debt is in
@@ -62,7 +71,7 @@ faithful.baseline.json and may only shrink. Never edit the baseline or faithful.
 make a check pass; if a rule is wrong for this project, say so and ask.
 
 With the Faithful MCP server attached, \`faithful_outline\`, \`faithful_verify\`,
-\`faithful_audit\`, \`faithful_explain\` and \`faithful_guard\` do the same and return the same lines.
+\`faithful_audit\`, \`faithful_parity\`, \`faithful_explain\` and \`faithful_guard\` do the same and return the same lines.
 
 ## Design agents
 

@@ -3,6 +3,7 @@ import { type AuditFacts, mergeViewports, scoreAudit } from '../src/audit.js';
 
 const clean = (over: Partial<AuditFacts> = {}, slop: Partial<AuditFacts['slop']> = {}): AuditFacts => ({
   viewport: { width: 375, height: 812 },
+  url: 'http://x.test/',
   scrollWidth: 375,
   overflow: [],
   clipped: [],
@@ -12,7 +13,9 @@ const clean = (over: Partial<AuditFacts> = {}, slop: Partial<AuditFacts['slop']>
   invisible: [],
   paragraphs: [{ sel: 'p', cpl: 60, lines: 4, lineHeight: 1.5, fontSize: 17, centred: false }],
   targets: [],
-  controls: [{ sel: 'a', role: 'link', name: 'Apply for a plot', href: '/apply' }],
+  controls: [{ sel: 'a', role: 'link', name: 'Apply for a plot', href: '/apply', visible: true }],
+  forms: [],
+  landmarks: ['main'],
   headings: [{ sel: 'h1', level: 1, text: 'Twelve plots free this spring' }],
   fontSizes: [15, 17, 24, 38],
   texts: [{ sel: 'h1', text: 'Twelve plots free this spring' }],
@@ -138,7 +141,7 @@ describe('scoreAudit', () => {
       scoreAudit(clean(over), 's')
         .findings.filter((x) => x.kind === 'wording')
         .map((x) => x.detail);
-    expect(k({ controls: [{ sel: 'a', role: 'link', name: 'Click here', href: '/a' }] })[0]).toMatch(
+    expect(k({ controls: [{ sel: 'a', role: 'link', name: 'Click here', href: '/a', visible: true }] })[0]).toMatch(
       /named only "Click here"/,
     );
     expect(
@@ -150,8 +153,8 @@ describe('scoreAudit', () => {
       })[0],
     ).toMatch(/2 different places/);
     // One "Learn more" to one place is understandable in context: not flagged.
-    expect(k({ controls: [{ sel: 'a', role: 'link', name: 'Learn more', href: '/a' }] })).toEqual([]);
-    expect(k({ controls: [{ sel: 'b', role: 'button', name: 'Submit' }] })[0]).toMatch(/"Submit"/);
+    expect(k({ controls: [{ sel: 'a', role: 'link', name: 'Learn more', href: '/a', visible: true }] })).toEqual([]);
+    expect(k({ controls: [{ sel: 'b', role: 'button', name: 'Submit', visible: true }] })[0]).toMatch(/"Submit"/);
     expect(
       k({
         controls: [

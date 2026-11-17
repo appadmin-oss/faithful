@@ -184,7 +184,8 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   // WCAG 2.4.4 / 2.4.9: a link must make sense out of context — a screen-reader user often
   // hears a list of links with nothing around them.
   const VAGUE = /^(click here|here|read more|learn more|more|link|this|go|details|continue reading)$/i;
-  const vague = f.controls.filter((c) => c.role === 'link' && VAGUE.test(c.name.replace(/[.…→›»\s]+$/, '')));
+  const seen = f.controls.filter((c) => c.visible !== false);
+  const vague = seen.filter((c) => c.role === 'link' && VAGUE.test(c.name.replace(/[.…→›»\s]+$/, '')));
   const vagueTargets = new Set(vague.map((c) => c.href ?? c.sel));
   if (
     vague.length &&
@@ -197,7 +198,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
       vague[0]?.sel,
     );
   }
-  const genericButtons = f.controls.filter(
+  const genericButtons = seen.filter(
     (c) => c.role === 'button' && /^(submit|ok|okay|click|send|go|yes|no)$/i.test(c.name),
   );
   if (genericButtons.length)
@@ -215,7 +216,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
     [/\be-mail\b/i, /\bemail\b/i, 'e-mail / email'],
     [/\b(shopping )?cart\b/i, /\bbasket\b/i, 'cart / basket'],
   ];
-  const labels = [...f.controls.map((c) => c.name), ...f.headings.map((h) => h.text)].join('\n');
+  const labels = [...seen.map((c) => c.name), ...f.headings.map((h) => h.text)].join('\n');
   for (const [a, b, name] of SYNONYMS)
     if (a.test(labels) && b.test(labels))
       add('wording', 'warn', `the same action has two names on this page (${name}): pick one`);

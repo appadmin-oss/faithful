@@ -153,6 +153,10 @@ export class Renderer {
         if (r.status() >= 400) failed.push({ url: r.url(), status: r.status() });
       });
       page.on('requestfailed', (r) => failed.push({ url: r.url(), status: 0 }));
+      let status: number | undefined;
+      page.on('response', (r) => {
+        if (r.request().isNavigationRequest() && r.frame() === page.mainFrame()) status = r.status();
+      });
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
       await page.addStyleTag({ content: FREEZE }).catch(() => undefined);
@@ -165,7 +169,11 @@ export class Renderer {
       if (opts.screenshot)
         await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });
       // The private origin's own favicon probe is not the page's fault.
-      facts.runtime = { errors, failed: failed.filter((f) => !/\/favicon\.ico$/.test(f.url)) };
+      facts.runtime = {
+        errors,
+        failed: failed.filter((f) => !/\/favicon\.ico$/.test(f.url)),
+        ...(status === undefined ? {} : { status }),
+      };
       return facts;
     } finally {
       await ctx.close();
