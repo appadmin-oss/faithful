@@ -6,14 +6,12 @@ not, and what to do next, in order.
 
 ## Where it stands
 
-Three commits on `main`, **not pushed anywhere**: the GitHub repo `appadmin-oss/faithful`
-could not be created from the build session (the organisation endpoint refused it). To publish:
-create an empty public repo `appadmin-oss/faithful`, then `git remote add origin … && git push -u
-origin main`. The npm scope `@faithful` must be created on npmjs.com before publishing (the
-unscoped name `faithful` belongs to someone else — never tell anyone to run `npx faithful`).
+`main` is on GitHub at `appadmin-oss/faithful`. To publish the packages, the npm scope
+`@faithful` must be created on npmjs.com first (the unscoped name `faithful` belongs to someone
+else — never tell anyone to run `npx faithful`).
 
 ```
-pnpm install && pnpm check     # lint, build, 108 tests, selftest — all green at hand-off
+pnpm install && pnpm check     # lint, build, 108 tests, selftest — all green
 ```
 
 Node 22.12+, and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
@@ -26,6 +24,7 @@ Node 22.12+, and any Chromium (`node packages/cli/dist/bin.js doctor` says which
 | `audit <url\|file>` | A page with no design, at 375 and 1440: clipped/overlapping/covered text, sideways scroll, broken images, script errors, failed requests, unrendered values, lorem/dummy data, invisible content, readability, small targets, too many sizes, wording, AI-slop tells scored by co-occurrence | `fixtures/audit/slop.html` (every planted fault found, once) and `clean.html` (nothing found); `packages/core/test/audit.test.ts` |
 | `parity --before <a> --after <b>` | Refactor/redesign: every link, button, form field, landmark, route still there; looks ignored; renames flagged; self-check plants a loss before trusting itself | `fixtures/parity/` (re-skin passes, four planted losses caught); `packages/core/test/parity.test.ts` |
 | `outline`, `spec`, `explain`, `guard`, `selftest`, `formats`, `doctor`, `init` | See `README.md` | `packages/cli/test/bin.test.ts` |
+| `faithful.deviations.json` | Intended changes, with reason, owner, expiry; covered findings become notes; stale entries reported | `packages/core/test/advance.test.ts`, `packages/cli/test/bin.test.ts` |
 | MCP server (`@faithful/mcp`) | Six tools over the same API: outline, verify, audit, parity, explain, guard | `packages/mcp/test/stdio.test.ts` (real stdio) |
 
 Every detector added since the first commit was broken on purpose and its test watched to
@@ -48,20 +47,17 @@ read that shape. Confirmed against a public MIT-licensed sample (Solar-Analytics
 
 ## Next, in order
 
-1. **Publish** (above). Nothing else is visible to anyone until then.
+1. **Publish to npm** (above).
 2. **Canvas reader** (`packages/adapters`): one screen per board at its own `w` (height 900, or
    844 under 600px, for `expand: "fill"`; else `h`), titled from `title`. Then `verify` needs a
    `--screen <id>` filter: comparing every board against one build URL is meaningless, so with
    more than one board and no filter it must stop and list the ids. Add the design-system
    tokens reader beside it.
-3. **"Advance, don't copy blindly"** (owner's requirement). In `verify`, where the build departs
-   from the design and the departure FIXES a measurable fault — contrast passes where the
-   design's fails, a target grows past 24px, a line comes back under 75 characters — report it
-   as `improved` (the kind already exists in `findings.ts`, unused) instead of an error, and
-   only when nothing else regresses. Plus `faithful.deviations.json`: each intentional change
-   (design deviation, parity rename, removed control) with a reason, an owner and an expiry;
-   a declared one becomes a note, an undeclared one keeps failing, and the file is reviewed in
-   the diff like the guard baseline. No MCP tool may write it.
+3. **"Advance, don't copy blindly" — done.** `verify` credits a departure that FIXES a WCAG
+   fault (contrast crossing 4.5:1 / 3:1, a control grown past the target size) as `improved`,
+   and `faithful.deviations.json` declares intended changes with a reason, an owner and an
+   expiry (`packages/core/src/deviations.ts`). Next in this area: line length and spacing-scale
+   improvements, and crediting a move TOWARDS a design token.
 4. **Audit tuning from the community research** (most valuable first):
    - **Text contrast (WCAG 1.4.3)** — the commonest failure in AI-built sites and NOT checked
      yet. Walk ancestors for the background; text over an image or gradient is "cannot
