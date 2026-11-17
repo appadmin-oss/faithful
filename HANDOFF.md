@@ -35,6 +35,26 @@ what to do next, in order.
 Every detector was broken on purpose and its test watched to fail. Keep doing that
 (`AGENTS.md`). Exit codes: 0 pass, 1 fail, 2 bad call.
 
+## How effective it is, and how it compares
+
+**Measured so far** (planted faults only — they prove each detector works, not how it does on
+real sites): `verify` caught 6/6 faults planted in a real Claude Design board, 0 false alarms on
+an identical copy, and rendered 24 real boards (20/24 page heights match the designer's own
+report). `audit` caught every planted fault once, 0 on a clean page. `parity` caught 4/4
+planted losses, 0 on a full re-skin. Each check was also broken on purpose to see its test fail.
+
+**Not measured:** recall and false-alarm rate on real sites. Estimates — parity high; verify
+medium-high; audit's mechanical faults medium-high; the slop score unknown (peer tools report
+5–10% false alarms, and audit has no contrast check yet).
+
+**Against popular tools** (judgement, out of 10; Fit = covers Faithful's job, Proof = maturity
+and measured accuracy, Agent = output usable by a coding agent): Faithful Fit 8, Proof 2–3,
+Agent 9. Every category has a stronger specialist — axe-core and Lighthouse (accessibility,
+Proof 10), Meticulous (refactor replay), Applitools/Percy/Chromatic (visual, paid),
+Impeccable and ai-design-checker (slop) — and none combines design→build checking, a no-design
+audit and redesign parity with agent-first output. The edge is the combination; the gap is
+PROOF, not features.
+
 ## Design readers
 
 Claude Design `.dc.html` (with or without `support.js`), HTML/URLs, Figma REST JSON, Faithful
@@ -50,45 +70,48 @@ read that shape. Confirmed against a public MIT-licensed sample (Solar-Analytics
 
 ## Next, in order
 
+The order is set by the gaps above: proof first, then reuse where a specialist is stronger,
+then breadth.
+
 1. **Publish to npm** once the `@faithful` scope exists; set the GitHub description and topics.
-2. **Canvas reader** (`packages/adapters`): one screen per board at its own `w` (height 900, or
-   844 under 600px, for `expand: "fill"`; else `h`), titled from `title`. `verify` then needs
-   `--screen <id>`: with several boards and no filter it must stop and list the ids. Add the
-   design-system tokens reader beside it.
-3. **Audit tuning from the community research** (most valuable first):
-   - **Text contrast (WCAG 1.4.3)** — the commonest failure in AI-built sites, NOT checked by
-     `audit` yet (`verify` uses contrast only to credit improvements). Walk ancestors for the
-     background; text over an image or gradient is "cannot determine", never a pass.
-   - **Side-stripe borders: only on rows of 3+ sibling cards.** On callouts and blockquotes it
-     is a normal design; today it fires on any box (`audit-probe.ts`, `sideStripes`).
-   - Dead links (`href="#"`, `javascript:void(0)`), internal links that 404, missing `#id`
-     targets.
-   - Scaffold leftovers: titles "React App" / "Vite + React + TS" / "Create Next App", default
-     favicons, missing or duplicate title/description.
-   - Heading structure: no H1, several H1s, skipped levels.
-   - Agent text leaking into the UI: "TODO", "mock data", "(replace with …)", "Your Company".
-   - Placeholder avatar hosts (dicebear, pravatar, randomuser, ui-avatars), `555-` numbers.
-   - Hover effects on things that are not clickable; visible focus (Tab walk + screenshot
-     diff); dark-mode contrast (only when the CSS has `prefers-color-scheme`).
-   - Keep the do-not-flag list (in `faithful-ui-quality`): Inter/Geist alone, brand purple
-     alone, glass on a sticky header or modal, emoji in consumer apps, em dashes, dark-only
-     products, pre-2023 template sites.
-4. **Validate the slop score against labelled data** before calling it accurate: Adrian Krebs'
-   `ai-design-checker` (MIT) ships 165 labelled sites; UICrit (licence unverified) has 3,059
-   critiques. Put precision and recall in the README.
-5. **More "advance" credits:** line length back under 75 characters, spacing moved onto the
+   Nothing is used until it can be installed.
+2. **Measure the slop score** against Adrian Krebs' `ai-design-checker` labelled set (MIT, 165
+   sites, `npm run eval`): precision and recall, printed in the README. Re-measure after every
+   rule change. UICrit (3,059 critiques; licence unverified) next.
+3. **Run axe-core inside `audit`** (`@axe-core/playwright`, MPL-2.0; enable the `wcag22aa` tag
+   or `target-size` stays off). Treat its "needs review" as review items, not passes. This
+   alone closes most of the accessibility gap with the leaders.
+4. **Text contrast in `audit` (WCAG 1.4.3)** — the commonest failure in AI-built sites. Walk
+   ancestors for the background; text over an image or gradient is "cannot determine", never a
+   pass. Then a dark-mode pass when the CSS has `prefers-color-scheme`.
+5. **Measure parity on one real redesign** (the owner's NextGenGen update is the natural case):
+   before/after URLs, every finding checked by hand, false alarms fixed with a test each.
+6. **Canvas reader** (`packages/adapters`): one screen per board at its own `w` (height 900, or
+   844 under 600px, for `expand: "fill"`; else `h`), titled from `title`; `verify --screen <id>`,
+   stopping with the list of ids when several boards and no filter. Add the design-system
+   tokens reader (`{name, value, usage}` lists, per-theme values) beside it.
+7. **Verify match levels**, after Applitools: `--match strict|layout|ignore-colors`, so a
+   deliberate restyle can be checked for layout alone.
+8. **Audit tuning from the community research:**
+   - side-stripe borders only on rows of 3+ sibling cards (today any box — `sideStripes`);
+   - dead links (`href="#"`, `javascript:void(0)`), internal links that 404, missing `#id`s;
+   - scaffold leftovers ("React App" / "Vite + React + TS" titles, default favicons, missing or
+     duplicate title/description); heading structure (no H1, several, skipped levels);
+   - agent text leaking into the UI ("TODO", "mock data", "(replace with …)", "Your Company");
+     placeholder avatar hosts (dicebear, pravatar, randomuser, ui-avatars), `555-` numbers;
+   - hover effects on things that are not clickable; visible focus (Tab walk + screenshot diff).
+   - Keep the do-not-flag list in `faithful-ui-quality`.
+9. **More "advance" credits:** line length back under 75 characters, spacing moved onto the
    scale, a value moved TOWARDS a design token.
-6. **Parity, next signals:** network-contract parity (Playwright `recordHar`; diff method +
-   path template + JSON key shape) and journey replay — record a few role/name scripts on
-   BEFORE, lock and hash them before the agent starts (agents regenerate snapshots to pass),
-   replay on AFTER.
-7. **Fixing help for agents:** a cropped screenshot per finding, the winning CSS rule's file
-   and line (CDP `CSS.getMatchedStylesForNode` + source maps), forced hover/focus states.
-8. **The 24 public handoff samples** the research found (several unlicensed — local testing
-   only). Running them executes strangers' page scripts in the headless browser, so it needs
-   the owner's go-ahead.
-9. **Modularity**, delegated rather than rebuilt: an optional adapter running madge (MIT),
-   knip (ISC) and jscpd (MIT), failing only on regressions between BEFORE and AFTER.
+10. **Parity, next signals:** network-contract parity (Playwright `recordHar`; method + path
+    template + JSON key shape) and journey replay — record role/name scripts on BEFORE, lock and
+    hash them before the agent starts, replay on AFTER (Meticulous is the bar here).
+11. **Fixing help for agents:** a cropped screenshot per finding, the winning CSS rule's file
+    and line (CDP `CSS.getMatchedStylesForNode` + source maps), forced hover/focus states.
+12. **The 24 public handoff samples** the research found (several unlicensed — local testing
+    only); running them executes strangers' page scripts, so it needs the owner's go-ahead.
+13. **Modularity**, delegated: an optional adapter running madge (MIT), knip (ISC) and jscpd
+    (MIT), failing only on regressions between BEFORE and AFTER.
 
 ## Things that will bite you
 
@@ -109,7 +132,7 @@ read that shape. Confirmed against a public MIT-licensed sample (Solar-Analytics
 
 `docs/research/agentic-tools.md` (what makes agent tools effective). The later research —
 slop tells and their detectors, UX checks beyond axe, community complaints about AI-built UIs,
-refactor-parity practice — is summarised in items 3–9; its main sources: anthropics/skills
+refactor-parity practice — is summarised in the plan above; its main sources: anthropics/skills
 `frontend-design`, impeccable.style (Apache-2.0), ai-design-checker (MIT), pixelslop
 (Apache-2.0), Vercel Web Interface Guidelines (MIT), Design2Code (arXiv 2403.03163), Playwright
 ARIA snapshots, Anthropic's "AI code migration" (build a judge that passes on the original and
