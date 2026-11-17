@@ -35,6 +35,30 @@ faithful PASS clean · 100% match · placed · web/html
 > **Use `npx @faithful/cli`, never `npx faithful`.** The unscoped name on npm is an unrelated
 > package; in a project without Faithful installed, the short form downloads and runs it.
 
+## No design? Audit the page
+
+```
+$ npx @faithful/cli audit http://localhost:3000
+```
+
+Judges a page on its own, at a phone and a desktop width, and reports each fault once:
+
+- **Faults a user cannot get past:** text cut off by its box or drawn over other text, a page
+  that scrolls sideways on a phone, broken images, script errors, `undefined` /
+  `[object Object]` / `{{ x }}` printed where a value should be, lorem ipsum.
+- **Reading:** lines longer than 75 characters, tight line height, small body text, targets
+  under 24px, more than ten font sizes.
+- **Wording:** links named "click here", a row of "Learn more" links to different places,
+  "Submit" buttons, one action under two names (Sign in / Log in), headings mixing Title Case
+  and sentence case, doubled words.
+- **The tells of generated UI:** gradient text, coloured glow, emoji as icons, a stripe down
+  one side of a card, cards in cards, frosted glass, a pill badge above the headline, copy
+  that could describe any product. One tell is a warning; a purple brand set in Inter is not
+  flagged at all. Several strong tells together fail the page as "reads as generated".
+
+`fixtures/audit/` holds a page with every fault planted and a plain, deliberate page that must
+stay clean; both are run on every test.
+
 ## What it reads
 
 | Design | How |
@@ -78,7 +102,7 @@ writes `faithful.config.json`, an Agent Skill at `.agents/skills/faithful/SKILL.
 Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf…), and a five-line block in
 `AGENTS.md`, because a skill does not always load itself.
 
-Or attach the MCP server: four tools (`faithful_outline`, `faithful_verify`,
+Or attach the MCP server: five tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
 `faithful_explain`, `faithful_guard`), each returning the same compact lines plus structured
 content.
 
@@ -94,6 +118,7 @@ kind rather than once per finding, and the full result stays in `.faithful/last.
 
 ```
 faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
+faithful audit <url|file> [--viewports …]  judge a page with no design
 faithful outline <design|folder>       what a design contains, in a few lines
 faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)
 faithful explain [F3|--all]            detail of a finding from the last run

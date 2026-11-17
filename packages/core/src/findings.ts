@@ -34,6 +34,19 @@ export const KINDS = {
   'copy-missing': 'This design copy does not appear anywhere in the build.',
   pixels: 'This area looks different from the reference image.',
   unmeasured: 'This could not be measured; the comparison is partial.',
+  // Audit kinds: judged on the page alone, with no design to compare against.
+  runtime: 'Fix the script error or the failed request; part of the page may not have loaded.',
+  broken: 'Fix the image source, or remove the element.',
+  overflow: 'Stop it pushing past the screen: check fixed widths, 100vw, white-space:nowrap and long unbroken words.',
+  clipped: 'Let the box grow with its text (min-height, not height), or wrap it; never hide text that does not fit.',
+  overlap: 'Separate them: text drawn over text, or covered by another element, cannot be read.',
+  placeholder: 'Replace the placeholder or the unrendered value with real content.',
+  hidden: 'Content is invisible until a script reveals it; show it by default and animate only as an enhancement.',
+  readability: 'Keep body text 50–75 characters per line, line height about 1.5, size at least 16px on phones.',
+  'type-scale': 'Use fewer font sizes, from one type scale.',
+  wording: 'Say what happens or where it goes, one name per action, one capitalisation style, no shouting.',
+  slop: 'A pattern typical of generated UI; replace it with a decision specific to this product.',
+  improved: 'The build departs from the design here and is measurably better; keep it and tell the designer.',
 } as const;
 
 export type Kind = keyof typeof KINDS;

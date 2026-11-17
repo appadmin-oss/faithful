@@ -1,7 +1,7 @@
 {
   "name": "@faithful/mcp",
   "version": "0.1.0",
-  "description": "Faithful as an MCP server: four small tools any agent can call.",
+  "description": "Faithful as an MCP server: five small tools any agent can call.",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {

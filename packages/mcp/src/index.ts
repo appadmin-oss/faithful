@@ -1,5 +1,5 @@
 /**
- * Faithful as an MCP server. Four tools, each a thin shell over the same function the CLI
+ * Faithful as an MCP server. Five tools, each a thin shell over the same function the CLI
  * calls, so an agent gets the same answer whichever door it uses.
  *
  * Token budget is the design constraint here as everywhere: every tool's text is the compact
@@ -12,7 +12,17 @@
  * team reviews in a diff; a verifier the agent can quietly loosen is no verifier.
  */
 
-import { FaithfulError, formatGuard, guard, lastRun, loadConfig, OUT_DIR, outlineAny, verify } from '@faithful/cli';
+import {
+  audit,
+  FaithfulError,
+  formatGuard,
+  guard,
+  lastRun,
+  loadConfig,
+  OUT_DIR,
+  outlineAny,
+  verify,
+} from '@faithful/cli';
 import { explain, formatCompact, formatText } from '@faithful/core';
 import { McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
@@ -74,6 +84,29 @@ export function createServer(cwd = process.cwd()): McpServer {
           ...(viewports ? { viewports } : {}),
           ...(also?.length ? { also } : {}),
         });
+        return {
+          ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
+          structuredContent: formatCompact(run, max ?? 8),
+        };
+      }),
+  );
+
+  server.registerTool(
+    'faithful_audit',
+    {
+      title: 'Audit a page with no design',
+      description:
+        'Judge a page (URL or HTML file) on its own at phone and desktop width: clipped/overlapping text, sideways scroll, broken images, unrendered values, readability, wording, AI-slop tells.',
+      inputSchema: z.object({
+        target: z.string().describe('URL or HTML file path'),
+        viewports: z.string().optional().describe('Default "375x812,1440x900"'),
+        max: z.number().int().min(1).max(50).optional(),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ target, viewports, max }) =>
+      guarded(async () => {
+        const run = await audit({ target, cwd, config: await loadConfig(cwd), ...(viewports ? { viewports } : {}) });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
           structuredContent: formatCompact(run, max ?? 8),

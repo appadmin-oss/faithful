@@ -6,9 +6,10 @@
  */
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
-import type { Rendered, RenderTarget } from '@faithful/core';
+import type { AuditFacts, Rendered, RenderTarget } from '@faithful/core';
 import type { DesignElement, Region, Screen, Viewport } from '@faithful/spec';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
+import { auditProbe } from './audit-probe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates, findChrome } from './find-chrome.js';
 
@@ -119,6 +120,53 @@ export class Renderer {
       const screen: Rendered = toScreen(raw, viewport, screenId);
       if (target.probe) screen.probe = await page.evaluate(target.probe).catch((e: Error) => ({ error: e.message }));
       return screen;
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  /**
+   * Render a page and measure it for `faithful audit`: no design, so no element extraction —
+   * the audit probe's facts, plus what only the browser sees (script errors, failed requests).
+   */
+  async audit(
+    target: RenderTarget,
+    viewport: Viewport,
+    opts: { timeoutMs?: number; colorScheme?: 'light' | 'dark'; screenshot?: string } = {},
+  ): Promise<AuditFacts> {
+    const ctx: BrowserContext = await this.browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      deviceScaleFactor: 1,
+      reducedMotion: 'reduce',
+      colorScheme: opts.colorScheme ?? 'light',
+      locale: 'en-GB',
+      timezoneId: 'UTC',
+    });
+    const timeout = opts.timeoutMs ?? 30_000;
+    ctx.setDefaultTimeout(timeout);
+    const errors: string[] = [];
+    const failed: { url: string; status: number }[] = [];
+    try {
+      const page = await ctx.newPage();
+      page.on('pageerror', (e) => errors.push(e.message));
+      page.on('response', (r) => {
+        if (r.status() >= 400) failed.push({ url: r.url(), status: r.status() });
+      });
+      page.on('requestfailed', (r) => failed.push({ url: r.url(), status: 0 }));
+      if (target.initScript) await page.addInitScript({ content: target.initScript });
+      await this.load(page, target, timeout);
+      await page.addStyleTag({ content: FREEZE }).catch(() => undefined);
+      if (target.readyWhen) await page.waitForFunction(target.readyWhen, undefined, { timeout }).catch(() => undefined);
+      await page.evaluate(() => document.fonts?.ready.then(() => undefined)).catch(() => undefined);
+      await page.evaluate(
+        () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+      );
+      const facts: AuditFacts = await page.evaluate(auditProbe);
+      if (opts.screenshot)
+        await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });
+      // The private origin's own favicon probe is not the page's fault.
+      facts.runtime = { errors, failed: failed.filter((f) => !/\/favicon\.ico$/.test(f.url)) };
+      return facts;
     } finally {
       await ctx.close();
     }

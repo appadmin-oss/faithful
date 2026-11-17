@@ -16,6 +16,7 @@ import {
   type FaithfulConfig,
   inventoryOf,
   langOf,
+  mergeViewports,
   pickAdapter,
   type ReadContext,
   type RunResult,
@@ -24,6 +25,7 @@ import {
   type ScreenResult,
   type SourceInput,
   scanFile,
+  scoreAudit,
   summarise,
   type Violation,
 } from '@faithful/core';
@@ -350,5 +352,52 @@ export async function outlineAny(target: string, cfg: FaithfulConfig, viewports?
     return outline(await readDesign(target, s, parseViewports(viewports, cfg.viewports)));
   } finally {
     await s.close();
+  }
+}
+
+// ── Audit: a page judged on its own ─────────────────────────────────────────
+
+/** A phone and a desktop: most layout faults show at one and not the other. */
+export const AUDIT_VIEWPORTS = '375x812,1440x900';
+
+export interface AuditRunOptions {
+  target: string;
+  viewports?: string;
+  config?: FaithfulConfig;
+  cwd?: string;
+}
+
+/** Render a page at each viewport and judge it with no design: faults, readability, tells. */
+export async function audit(o: AuditRunOptions): Promise<RunResult> {
+  const cfg = o.config ?? (await loadConfig(o.cwd));
+  const session = new Session(cfg);
+  try {
+    const vps = parseViewports(o.viewports ?? AUDIT_VIEWPORTS, cfg.viewports);
+    const target = isUrl(o.target)
+      ? { url: o.target }
+      : {
+          html: await readFile(resolve(o.cwd ?? process.cwd(), o.target), 'utf8'),
+          baseDir: resolve(o.cwd ?? process.cwd(), o.target, '..'),
+        };
+    const results: ScreenResult[] = [];
+    for (const vp of vps) {
+      const facts = await (await session.browser()).audit(target, vp);
+      results.push(scoreAudit(facts, `audit@${vp.width}`, { minTarget: Math.min(cfg.minTarget, 24) }));
+    }
+    mergeViewports(results);
+    const provenance = {
+      adapter: 'audit',
+      adapterVersion: '0.1.0',
+      format: 'audit@1',
+      tier: 'rendered' as const,
+      confidence: 1,
+      source: o.target,
+      warnings: [] as string[],
+    };
+    const run = summarise(results, provenance, 'audit', 0);
+    await save(run, o.cwd);
+    return run;
+  } finally {
+    await session.close();
   }
 }

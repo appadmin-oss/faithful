@@ -18,6 +18,7 @@ import {
   selftestRules,
 } from '@faithful/core';
 import {
+  audit,
   FaithfulError,
   formatGuard,
   guard,
@@ -35,6 +36,7 @@ import { init } from './init.js';
 const HELP = `faithful — prove a build matches its design
 
   faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
+  faithful audit <url|file> [--viewports …] judge a page with no design: layout faults, readability, AI-slop tells
   faithful outline <design|folder>         what a design contains, in a few lines
   faithful spec <design> [--out file]      the design as a Faithful spec (for design agents to ship)
   faithful explain [F3|--all]              detail of a finding from the last run
@@ -81,6 +83,15 @@ async function main(argv: string[]): Promise<number> {
       if (v.viewports) opts.viewports = v.viewports;
       if (v.also?.length) opts.also = v.also;
       const run = await verify(opts);
+      console.log(
+        v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
+      );
+      return run.pass ? 0 : 1;
+    }
+    case 'audit': {
+      const target = pos[0];
+      if (!target) throw new FaithfulError('usage: faithful audit <url|file> [--viewports 375x812,1440x900]');
+      const run = await audit({ target, config: cfg, ...(v.viewports ? { viewports: v.viewports } : {}) });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
       );

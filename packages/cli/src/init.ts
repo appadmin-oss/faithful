@@ -48,6 +48,13 @@ npx @faithful/cli verify <design> --build <url-or-file> [--viewports 1440x900,39
 - "(indicative)" means the design could not be placed (tokens, a copy deck, an image without a
   sidecar): say so in your report rather than claiming a match.
 
+## A page with no design (or before calling any UI done)
+
+\`npx @faithful/cli audit <url-or-file>\` — at phone and desktop width: text cut off or drawn
+over text, sideways scroll, broken images, \`undefined\` on the page, readability, vague link
+and button wording, and the tells of generated UI. Fix every E; treat "reads as generated" as
+a design problem to solve, not a style to keep.
+
 ## Before committing
 
 \`npx @faithful/cli guard\` — no new !important, raw colours or off-scale type. Existing debt is in
@@ -55,7 +62,7 @@ faithful.baseline.json and may only shrink. Never edit the baseline or faithful.
 make a check pass; if a rule is wrong for this project, say so and ask.
 
 With the Faithful MCP server attached, \`faithful_outline\`, \`faithful_verify\`,
-\`faithful_explain\` and \`faithful_guard\` do the same and return the same lines.
+\`faithful_audit\`, \`faithful_explain\` and \`faithful_guard\` do the same and return the same lines.
 
 ## Design agents
 

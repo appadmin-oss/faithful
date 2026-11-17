@@ -18,7 +18,7 @@ export interface RunResult {
   pass: boolean;
   /** Lowest screen score, 0–100: a run is as good as its worst screen. */
   score: number;
-  mode: 'placed' | 'conformity';
+  mode: 'placed' | 'conformity' | 'audit';
   provenance: Provenance;
   /** Below 0.5 confidence, or conformity mode: the result is indicative. */
   indicative: boolean;
@@ -73,7 +73,8 @@ export function formatText(r: RunResult, max = 8, resultPath = '.faithful/last.j
   // as "FAIL 99/100" the two read as a contradiction, so the counts sit beside the verdict and
   // the similarity is named for what it is.
   const counts = c.error || c.warn ? `${c.error}E ${c.warn}W` : 'clean';
-  const head = `faithful ${verdict} ${counts} · ${Math.floor(r.score)}% match${notes} · ${r.mode}${r.indicative ? ' (indicative)' : ''} · ${r.provenance.format}`;
+  const match = r.mode === 'audit' ? '' : ` · ${Math.floor(r.score)}% match`;
+  const head = `faithful ${verdict} ${counts}${match}${notes} · ${r.mode}${r.indicative ? ' (indicative)' : ''} · ${r.provenance.format}`;
   // Errors and warnings are listed; notes (an overall offset, a fault the design has too) are
   // counted by kind in one line. A passing run with forty inherited notes is still two lines.
   const act = r.findings.filter((f) => f.severity !== 'info');

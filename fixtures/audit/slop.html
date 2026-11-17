@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nimbus — planted faults</title>
+<style>
+  body { margin:0; font-family: Inter, system-ui, sans-serif; background:#0b0b12; color:#e8e8f0; }
+  .hero { text-align:center; padding:80px 24px; }
+  .badge { display:inline-block; padding:4px 12px; border-radius:999px; background:rgba(124,58,237,.2); border:1px solid #7c3aed; font-size:13px; }
+  h1 { font-size:56px; background:linear-gradient(90deg,#7c3aed,#3b82f6); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .cta { display:inline-block; background:#7c3aed; color:#fff; padding:14px 22px; border-radius:12px; box-shadow:0 0 32px 4px rgba(124,58,237,.6); text-decoration:none; }
+  .grid { display:flex; gap:20px; padding:24px; }
+  .card { width:280px; height:180px; padding:20px; border-radius:16px; background:rgba(255,255,255,.06); backdrop-filter:blur(12px); }
+  .card .inner { border-radius:12px; background:rgba(255,255,255,.08); padding:12px; min-height:60px; }
+  .tile { width:44px; height:44px; border-radius:12px; background:#7c3aed; }
+  .note { border-left:4px solid #3b82f6; border-radius:8px; padding:12px; margin:24px; }
+  .wide { width:1200px; }
+  .fixed { height:40px; overflow:hidden; width:220px; }
+  .reveal { opacity:0; }
+  p { text-align:center; }
+  .stack { position:relative; height:40px; margin:24px; }
+  .stack span { position:absolute; left:0; top:0; font-size:18px; }
+  .tiny { width:14px; height:14px; display:inline-block; }
+</style>
+</head>
+<body>
+<section class="hero">
+  <span class="badge">✨ New: AI-powered</span>
+  <h1>Elevate your workflow</h1>
+  <p>Unlock the power of seamless collaboration with our cutting-edge platform.</p>
+  <a class="cta" href="#">🚀 Get started</a>
+</section>
+<section class="grid">
+  <div class="card"><div class="tile"></div><h3>Fast</h3><div class="inner">Blazing speed</div></div>
+  <div class="card"><div class="tile"></div><h3>Secure</h3><div class="inner">Bank-grade</div></div>
+  <div class="card"><div class="tile"></div><h3>Simple</h3><div class="inner">No setup</div></div>
+</section>
+<div class="note">Lorem ipsum dolor sit amet, consectetur adipiscing elit.</div>
+<div class="wide">A banner that is wider than any phone screen.</div>
+<div class="fixed">This label has far too much text for the box it was given, so the rest of it is simply cut away and never seen by anybody.</div>
+<p class="reveal">Revealed on scroll, never seen without the script.</p>
+<p class="reveal">Second hidden block.</p>
+<p class="reveal">Third hidden block.</p>
+<p>Joined by <span id="n">undefined</span></p>
+<p>Contact John Doe</p>
+<img src="missing-photo.png" alt="Team photo">
+<a class="tiny" href="/x" aria-label="close"></a>
+<div class="stack"><span>Monthly price</span><span>Yearly price</span></div>
+<p>To read our terms <a href="/terms">click here</a>. Already a member? <a href="/signin">Sign in</a></p>
+<form><input name="q" aria-label="Search"><button>Submit</button><button type="button">Log in</button></form>
+<p>Paragraph one.</p><p>Paragraph two.</p>
+</body>
+</html>

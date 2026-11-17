@@ -1,5 +1,6 @@
 export * from './adapter.js';
 export * from './assign.js';
+export * from './audit.js';
 export * from './color.js';
 export * from './compare.js';
 export * from './config.js';
