@@ -122,9 +122,8 @@ Findings come back root-cause first: missing, copy and size before the positions
 npx @faithful/cli init
 ```
 
-writes `faithful.config.json`, an Agent Skill at `.agents/skills/faithful/SKILL.md` (read by
-Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf…), and a five-line block in
-`AGENTS.md`, because a skill does not always load itself.
+writes `faithful.config.json`, six Agent Skills under `.agents/skills/` (see [Skills](#skills)),
+and a short block in `AGENTS.md`, because a skill does not always load itself.
 
 Or attach the MCP server: six tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
 `faithful_parity`, `faithful_explain`, `faithful_guard`), each returning the same compact lines plus structured
@@ -137,6 +136,24 @@ content.
 The output is built for a token budget: a clean run is one line, a fix hint is printed once per
 kind rather than once per finding, and the full result stays in `.faithful/last.json` for
 `faithful explain F3` to pull on demand.
+
+## Skills
+
+`npx @faithful/cli init` installs six Agent Skills into `.agents/skills/` (read by Claude Code,
+Codex, Cursor, Copilot, Gemini CLI and others). Each teaches one job and ends in the command
+that proves it was done:
+
+| Skill | For |
+|---|---|
+| `faithful` | Running Faithful: outline, verify, audit, parity, guard |
+| `faithful-implement-design` | Building a screen from a design: tokens first, copy final, verify each screen, fix what the design gets measurably wrong and declare what you change |
+| `faithful-ui-quality` | A page that works and looks decided: the faults, readability, the tells of generated UI, and what NOT to flag |
+| `faithful-safe-redesign` | Refactoring or re-skinning working UI in small steps with a parity check after each, so nothing users could do is lost |
+| `faithful-ui-copy` | Interface wording: links that say where they go, buttons that say what they do, one name per action, useful errors |
+| `faithful-design-handoff` | For design agents: a handoff a builder can match exactly and verify automatically |
+
+`--skills faithful,faithful-ui-copy` installs only those. The source is
+[`packages/cli/skills/`](packages/cli/skills/).
 
 ## Commands
 
@@ -156,6 +173,24 @@ faithful init                          config, agent skill and AGENTS.md block
 
 Exit codes: **0** pass, **1** fail (fix the build), **2** the call itself was wrong (a typo, a
 missing file). A script that cannot tell a failing build from a typo loops on the typo.
+
+### Advance, don't copy blindly
+
+Where a build departs from its design to fix a measurable fault — text contrast crossing
+4.5:1 (3:1 for large text), a control grown past the minimum target — `verify` reports it as
+`improved`, a note, not an error. Anything else changed on purpose goes in
+`faithful.deviations.json`:
+
+```json
+{ "deviations": [
+  { "kind": "renamed", "match": "My orders", "reason": "copy review, Nov 2026", "owner": "design" },
+  { "kind": "color", "match": "Book now", "reason": "brand refresh", "owner": "brand", "expires": "2027-03-01" }
+] }
+```
+
+A covered finding becomes a note quoting the reason; an expired entry covers nothing; an entry
+that covers nothing is reported, so the file cannot quietly turn into a list of excuses. It is
+committed and reviewed like code, and no MCP tool writes it.
 
 ### Guard
 

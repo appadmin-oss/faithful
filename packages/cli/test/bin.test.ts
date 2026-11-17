@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { AGENTS_BLOCK, init, SKILL } from '../src/index.js';
+import { AGENTS_BLOCK, init, SKILL, SKILLS } from '../src/index.js';
 
 const BIN = resolve(__dirname, '../dist/bin.js');
 const run = (cwd: string, ...args: string[]) => {
@@ -58,6 +58,8 @@ describe('init', () => {
     expect(agents.split('<!-- faithful:begin -->')).toHaveLength(2);
     expect(existsSync(join(d, 'faithful.config.json'))).toBe(true);
     expect(readFileSync(join(d, '.agents/skills/faithful/SKILL.md'), 'utf8')).toBe(SKILL);
+    for (const name of Object.keys(SKILLS))
+      expect(existsSync(join(d, `.agents/skills/${name}/SKILL.md`)), name).toBe(true);
   });
 
   it("never tells an agent to run `npx faithful`: that name on npm is somebody else's package", () => {

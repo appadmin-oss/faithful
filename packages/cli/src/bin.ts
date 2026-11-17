@@ -46,7 +46,7 @@ const HELP = `faithful — prove a build matches its design
   faithful selftest                        prove every rule and the comparison can see a planted fault
   faithful formats                         the design formats Faithful reads
   faithful doctor                          check the browser and environment
-  faithful init                            write faithful.config.json, the agent skill and an AGENTS.md block
+  faithful init [--skills a,b]              write faithful.config.json, the agent skills and an AGENTS.md block
 
 Designs: Claude Design .dc.html, HTML (file or URL), Figma REST JSON, DTCG tokens, CSS custom
 properties, Tailwind @theme, DESIGN.md, copy decks (.txt), images (+ .faithful.json sidecar).
@@ -62,6 +62,7 @@ async function main(argv: string[]): Promise<number> {
       before: { type: 'string' },
       after: { type: 'string' },
       pages: { type: 'string' },
+      skills: { type: 'string' },
       viewports: { type: 'string', short: 'v' },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
@@ -214,7 +215,8 @@ async function main(argv: string[]): Promise<number> {
       return exe ? 0 : 2;
     }
     case 'init': {
-      for (const line of await init()) console.log(line);
+      for (const line of await init(process.cwd(), v.skills ? v.skills.split(',').map((x) => x.trim()) : undefined))
+        console.log(line);
       return 0;
     }
     default:
