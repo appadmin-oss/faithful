@@ -1,0 +1,142 @@
+# Faithful
+
+**Prove that what was built matches what was designed.** For coding agents, design agents and
+the people reviewing their work.
+
+A design is a specification: every colour, size, radius, string and state in it was decided.
+Most "does it match the design?" checks are a person squinting at two screenshots, or an agent
+saying it tried. Faithful renders both, pairs every element, and says exactly what differs, in
+a few lines an agent can act on:
+
+```
+$ npx @faithful/cli verify design.html --build build.html --viewports 1440x900
+faithful FAIL 7E 1W · 87% match · 1 note · placed · web/html
+F1 E missing: text "Business" at 725,509 89×24 [div.plan:nth-of-type(3)>h2] @725,509 89×24
+F2 E missing: text "Single sign-on and audit logs." at 725,551 225×20 [div.plan:nth-of-type(3)>p] @725,551 225×20
+F3 E text: "Plans that grow with your team." → "Plans that grow with your company." [h1] @40,170 569×119
+F4 E font-size "Plans that grow with your team.": 56px → 48px [h1] @40,170 569×119
+F5 E size "Plans that grow with your team.": 535×128 → 569×119 [h1] @40,170 569×119
+F6 E color "Plans that grow with your team.": rgb(16, 41, 44) → rgb(29, 78, 216) (ΔE 29.4) [h1] @40,170 569×119
+F7 E position "Sign in": off by 90px × 0px from where its neighbours put it [a:nth-of-type(2)] @1258,20 52×24
+F8 W missing: box at 700,484 310×130 [div.plan:nth-of-type(3)] @700,484 310×130
+fix: missing → Add this element; the design has it and the build does not. | text → Use the design copy exactly. | …
+```
+
+That is `fixtures/pricing/` in this repository; run it yourself. The hero is vertically
+centred, so the smaller heading moved the eyebrow above it, and that is not reported: it is
+the heading's finding.
+
+A faithful build is one line:
+
+```
+faithful PASS clean · 100% match · placed · web/html
+```
+
+> **Use `npx @faithful/cli`, never `npx faithful`.** The unscoped name on npm is an unrelated
+> package; in a project without Faithful installed, the short form downloads and runs it.
+
+## What it reads
+
+| Design | How |
+|---|---|
+| Claude Design handoffs (`.dc.html`) | Rendered with or without `support.js` and their data scripts: Faithful runs the component's own logic, or falls back to its static template and says so |
+| HTML / JSX prototypes, dev servers, live URLs | Rendered in Chromium |
+| Figma REST exports (`GET /v1/files/:key`) | Frames become screens, frame-relative |
+| A Faithful spec (`*.faithful.json`) | Written by a design agent, or by `faithful spec` |
+| Design tokens: DTCG JSON, CSS custom properties, Tailwind v4 `@theme` | An inventory: is every colour, size and radius in the build one the design has? |
+| `DESIGN.md`, copy decks (`.txt`) | The same, from prose and from the copy |
+| Reference images | Placed with a `.faithful.json` sidecar, indicative without one |
+
+A design that can be placed (it has screens) is compared element by element at its own
+viewport. One that cannot (tokens, a copy deck) is checked for **conformity**, and the result
+says `(indicative)` so nobody reports it as a match.
+
+## What it checks
+
+- **Coverage**: missing and extra elements; text split across elements or merged into one.
+- **Copy**: exact strings, with capitalisation reported separately.
+- **Position, relative to neighbours**: an element is judged against what places it (its
+  container, the element above, the one to its left), so a taller header is ONE finding, not
+  one per element below it. A stack that re-centres because one member changed height blames
+  that member.
+- **Size, type and colour**: font family (the face that actually rendered, not the one the CSS
+  asked for), size, weight, line height, letter spacing; text and background colour by
+  CIEDE2000; borders and radii.
+- **Touch targets** under the minimum.
+- **Faults the design has too** are notes, not errors: you are not asked to fix the designer's
+  12px button.
+
+Findings come back root-cause first: missing, copy and size before the positions they move.
+
+## For agents
+
+```
+npx @faithful/cli init
+```
+
+writes `faithful.config.json`, an Agent Skill at `.agents/skills/faithful/SKILL.md` (read by
+Claude Code, Codex, Cursor, Copilot, Gemini CLI, Windsurf…), and a five-line block in
+`AGENTS.md`, because a skill does not always load itself.
+
+Or attach the MCP server: four tools (`faithful_outline`, `faithful_verify`,
+`faithful_explain`, `faithful_guard`), each returning the same compact lines plus structured
+content.
+
+```json
+{ "mcpServers": { "faithful": { "command": "npx", "args": ["-y", "@faithful/mcp"] } } }
+```
+
+The output is built for a token budget: a clean run is one line, a fix hint is printed once per
+kind rather than once per finding, and the full result stays in `.faithful/last.json` for
+`faithful explain F3` to pull on demand.
+
+## Commands
+
+```
+faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
+faithful outline <design|folder>       what a design contains, in a few lines
+faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)
+faithful explain [F3|--all]            detail of a finding from the last run
+faithful guard [files…] [--update-baseline]   source rules: no !important, raw colours, off-scale type
+faithful selftest                      prove every rule and the comparison can see a planted fault
+faithful formats                       the design formats Faithful reads
+faithful doctor                        check the browser and environment
+faithful init                          config, agent skill and AGENTS.md block
+```
+
+Exit codes: **0** pass, **1** fail (fix the build), **2** the call itself was wrong (a typo, a
+missing file). A script that cannot tell a failing build from a typo loops on the typo.
+
+### Guard
+
+`faithful guard` scans source for design-system drift: raw colours outside the token file,
+off-scale type, `!important`. Existing debt goes in `faithful.baseline.json`, which is
+committed and may only shrink. There is deliberately no MCP tool to rewrite it: a baseline is
+a decision a team reviews in a diff, and a verifier the agent can quietly loosen is no
+verifier.
+
+## Requirements
+
+Node 22.12 or later and a Chromium. Faithful uses Playwright's browser if one is installed,
+otherwise the system Chrome or Chromium; set `FAITHFUL_CHROMIUM` to choose one.
+`faithful doctor` says which it found.
+
+## Packages
+
+| Package | |
+|---|---|
+| `@faithful/cli` | The `faithful` command and the programmatic API |
+| `@faithful/mcp` | The MCP server |
+| `@faithful/core` | Matching, comparison, scoring, reports, guards (no browser) |
+| `@faithful/browser` | Rendering and extraction in Chromium |
+| `@faithful/adapters` | The design readers |
+| `@faithful/spec` | The Faithful spec types and validator |
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Every change to a check ships with a test that fails
+without it. Security reports: [SECURITY.md](SECURITY.md).
+
+## Licence
+
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

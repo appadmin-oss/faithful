@@ -1,0 +1,27 @@
+{
+  "name": "faithful-monorepo",
+  "private": true,
+  "type": "module",
+  "description": "Faithful: prove that what was built matches what was designed. For coding agents, design agents and people.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "tsc -b packages/cli packages/mcp",
+    "typecheck": "tsc -b packages/cli packages/mcp --noEmit",
+    "test": "vitest run",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "selftest": "node packages/cli/dist/bin.js selftest",
+    "check": "pnpm lint && pnpm build && pnpm test && pnpm selftest"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@types/node": "^22.10.0",
+    "@types/pngjs": "^6.0.5",
+    "typescript": "~5.9.3",
+    "vitest": "5.1.0"
+  }
+}

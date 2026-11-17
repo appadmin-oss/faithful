@@ -1,0 +1,4 @@
+packages:
+  - packages/*
+# Supply-chain hygiene: wait three days before taking a freshly published version.
+minimumReleaseAge: 4320

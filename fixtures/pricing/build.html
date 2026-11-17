@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pricing — build</title>
+<style>
+  :root { --ink:#10292c; --soft:#626a6e; --ground:#f1efe9; --green:#237b22; --line:#d6d4cc; }
+  body { margin:0; background:var(--ground); color:var(--ink); font:16px/24px system-ui, sans-serif; }
+  header { display:flex; justify-content:space-between; align-items:center; height:64px; padding:0 40px; }
+  header a { color:var(--ink); text-decoration:none; font-weight:600; }
+  .hero { display:flex; flex-direction:column; justify-content:center; height:420px; padding:0 40px; max-width:640px; }
+  .ey { color:var(--soft); font-size:14px; }
+  h1 { font-size:56px; line-height:60px; margin:12px 0 16px; letter-spacing:-1px; }
+  .cta { align-self:flex-start; background:var(--green); color:#fff; padding:14px 22px; border-radius:999px; text-decoration:none; font-weight:600; }
+  .plans { display:flex; gap:20px; padding:0 40px 40px; }
+  .plan { background:#fff; border:1px solid var(--line); border-radius:16px; padding:24px; width:260px; }
+  .plan h2 { font-size:20px; margin:0 0 8px; }
+</style>
+</head>
+<body>
+<header><a href="#">Northwind</a><a href="#" style="margin-right:90px">Sign in</a></header>
+<section class="hero">
+  <span class="ey">Pricing · all plans</span>
+  <h1 style="font-size:48px;color:#1d4ed8">Plans that grow with your company.</h1>
+  <p>Start free, then pay only for the seats you use.</p>
+  <a class="cta" href="#">Start free trial</a>
+</section>
+<section class="plans">
+  <div class="plan"><h2>Starter</h2><p>For one person finding their feet.</p></div>
+  <div class="plan"><h2>Team</h2><p>Shared projects and roles.</p></div>
+</section>
+</body>
+</html>

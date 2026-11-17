@@ -1,0 +1,41 @@
+{
+  "name": "@faithful/mcp",
+  "version": "0.1.0",
+  "description": "Faithful as an MCP server: four small tools any agent can call.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/appadmin-oss/faithful.git",
+    "directory": "packages/mcp"
+  },
+  "dependencies": {
+    "@faithful/cli": "workspace:*",
+    "@modelcontextprotocol/server": "^2.4.0",
+    "zod": "^4.6.7",
+    "@faithful/core": "workspace:*"
+  },
+  "bin": {
+    "faithful-mcp": "./dist/bin.js"
+  },
+  "keywords": [
+    "mcp",
+    "design",
+    "verification",
+    "agents",
+    "faithful"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@faithful/browser",
+  "version": "0.1.0",
+  "description": "Render a page in a real browser and read every visible element, for Faithful.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": { "node": ">=22.12" },
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "repository": { "type": "git", "url": "git+https://github.com/appadmin-oss/faithful.git", "directory": "packages/browser" },
+  "dependencies": { "@faithful/spec": "workspace:*", "@faithful/core": "workspace:*", "playwright-core": "^1.65.1" }
+}
