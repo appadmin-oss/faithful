@@ -66,3 +66,23 @@ describe('init', () => {
     expect(SKILL.split('\n').length).toBeLessThan(100);
   });
 });
+
+describe('faithful parity (bin) with a deviations file', () => {
+  it('fails on an undeclared rename, passes once the team declares it', () => {
+    const d = tmp();
+    const fx = resolve(__dirname, '../../../fixtures/parity');
+    writeFileSync(join(d, 'before.html'), readFileSync(join(fx, 'before.html'), 'utf8'));
+    writeFileSync(join(d, 'after.html'), readFileSync(join(fx, 'after-good.html'), 'utf8'));
+    const first = run(d, 'parity', '--before', 'before.html', '--after', 'after.html');
+    expect(first.out).toMatch(/renamed: link "My orders" is now "Your orders"/);
+    writeFileSync(
+      join(d, 'faithful.deviations.json'),
+      JSON.stringify({ deviations: [{ kind: 'renamed', match: 'My orders', reason: 'copy review', owner: 'design' }] }),
+    );
+    const second = run(d, 'parity', '--before', 'before.html', '--after', 'after.html');
+    expect(second.code).toBe(0);
+    expect(second.out).toMatch(/^faithful PASS clean/);
+    writeFileSync(join(d, 'faithful.deviations.json'), '{"deviations":[{"match":"x"}]}');
+    expect(run(d, 'parity', '--before', 'before.html', '--after', 'after.html').code).toBe(2);
+  }, 120_000);
+});

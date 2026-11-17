@@ -9,6 +9,7 @@ import { ADAPTERS } from '@faithful/adapters';
 import { Renderer } from '@faithful/browser';
 import {
   type Adapter,
+  applyDeviations,
   checkConformity,
   compareParity,
   compareScreens,
@@ -19,6 +20,7 @@ import {
   langOf,
   mergeViewports,
   normHref,
+  parseDeviations,
   pickAdapter,
   type ReadContext,
   type RunResult,
@@ -36,6 +38,7 @@ import type { FaithfulSpec, Inventory, Viewport } from '@faithful/spec';
 
 export const OUT_DIR = '.faithful';
 export const BASELINE = 'faithful.baseline.json';
+export const DEVIATIONS = 'faithful.deviations.json';
 
 export class FaithfulError extends Error {
   override readonly name = 'FaithfulError';
@@ -184,6 +187,7 @@ export async function verify(o: VerifyOptions): Promise<RunResult> {
         results.push(checkConformity(merged, bs, cfg, `conformity@${vp.width}`));
       }
     }
+    await withDeviations(results, o.cwd);
     const run = summarise(results, design.provenance, placed.length ? 'placed' : 'conformity', cfg.passScore);
     await save(run, o.cwd);
     return run;
@@ -397,6 +401,7 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
       source: o.target,
       warnings: [] as string[],
     };
+    await withDeviations(results, o.cwd);
     const run = summarise(results, provenance, 'audit', 0);
     await save(run, o.cwd);
     return run;
@@ -475,10 +480,36 @@ export async function parity(o: ParityOptions): Promise<RunResult> {
       source: `${o.before} → ${o.after}`,
       warnings: [] as string[],
     };
+    await withDeviations(results, o.cwd);
     const run = summarise(results, provenance, 'parity', 0);
     await save(run, o.cwd);
     return run;
   } finally {
     await session.close();
   }
+}
+
+/** The team's declared deviations, applied to every finding of a run before it is judged. */
+export async function withDeviations(results: ScreenResult[], cwd = process.cwd()): Promise<ScreenResult[]> {
+  const path = resolve(cwd, DEVIATIONS);
+  if (!existsSync(path)) return results;
+  let devs: ReturnType<typeof parseDeviations>;
+  try {
+    devs = parseDeviations(JSON.parse(await readFile(path, 'utf8')));
+  } catch (e) {
+    throw new FaithfulError((e as Error).message);
+  }
+  // Applied across the run, so an entry is "unused" only when NO screen needed it.
+  const counts = results.map((r) => r.findings.length);
+  const all = applyDeviations(
+    results.flatMap((r) => r.findings),
+    devs,
+  );
+  let i = 0;
+  results.forEach((r, k) => {
+    r.findings = all.slice(i, i + (counts[k] as number));
+    i += counts[k] as number;
+  });
+  if (results[0]) results[0].findings.push(...all.slice(i));
+  return results;
 }

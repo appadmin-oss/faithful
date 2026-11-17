@@ -8,7 +8,7 @@
  * neighbours it is the one size finding on the header, and the rest pass.
  */
 import type { DesignElement, ElementStyle, Screen } from '@faithful/spec';
-import { deltaE, isTransparent } from './color.js';
+import { contrastRatio, deltaE, isTransparent, parseColor } from './color.js';
 import type { FaithfulConfig } from './config.js';
 import type { Finding, Kind, Severity } from './findings.js';
 import { area, containment, fmtBox, median } from './geometry.js';
@@ -284,8 +284,25 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
         : within(p.b.box.w, p.d.box.w, T.px, T.pct, p.d.box.w);
     const hOk = within(p.b.box.h, p.d.box.h, T.px, T.pct, p.d.box.h);
     style.total++;
+    // A control the design drew under the minimum target, built at or above it and only
+    // GROWN, is the build fixing the design (WCAG 2.5.8), not departing from it.
+    const grewToTarget =
+      !!p.b.interactive &&
+      Math.min(p.d.box.w, p.d.box.h) < cfg.minTarget &&
+      Math.min(p.b.box.w, p.b.box.h) >= cfg.minTarget &&
+      p.b.box.w >= p.d.box.w - T.px &&
+      p.b.box.h >= p.d.box.h - T.px;
     if (wOk && hOk) style.ok++;
-    else
+    else if (grewToTarget) {
+      style.ok++;
+      add(
+        'improved',
+        'info',
+        `target ${Math.round(p.d.box.w)}×${Math.round(p.d.box.h)} → ${Math.round(p.b.box.w)}×${Math.round(p.b.box.h)}: the design is under ${cfg.minTarget}px, the build is not`,
+        p.d,
+        p.b,
+      );
+    } else
       add(
         'size',
         'error',
@@ -296,7 +313,29 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
   });
 
   // ---- Copy and style, per pair --------------------------------------------------------
+  // What a text is drawn ON: the smallest element containing it that paints a background.
+  // Used to tell a colour change that FIXES a contrast failure from one that breaks the design.
+  const groundIn =
+    (els: DesignElement[]) =>
+    (e: DesignElement): string => {
+      if (!e.box) return '#ffffff';
+      let best: DesignElement | undefined;
+      for (const o of els) {
+        if (o === e || !o.box || !o.style?.background || isTransparent(o.style.background)) continue;
+        if (containment(e.box, o.box) < 0.95 || area(o.box) <= area(e.box) * 0.99) continue;
+        if (!best?.box || area(o.box) < area(best.box)) best = o;
+      }
+      return best?.style?.background ?? '#ffffff';
+    };
+  const groundD = groundIn(design.elements);
+  const groundB = groundIn(build.elements);
   for (const p of m.pairs) {
+    const better = improvedContrast(p.d, p.b, groundD(p.d), groundB(p.b));
+    if (better) {
+      add('improved', 'info', better, p.d, p.b);
+      color.total++;
+      color.ok++;
+    }
     if (p.d.text && p.b.text) {
       text.total++;
       const c = compareCopy(p.d.text, p.b.text);
@@ -306,7 +345,7 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
         add('case', 'warn', `"${snippet(p.d.text, 40)}" → "${snippet(p.b.text, 40)}"`, p.d, p.b);
       } else add('text', 'error', `"${snippet(p.d.text, 48)}" → "${snippet(p.b.text, 48)}"`, p.d, p.b);
     }
-    compareStyle(p, T, color, style, add);
+    compareStyle(p, T, color, style, add, better ? new Set<Kind>(['color', 'background']) : undefined);
   }
 
   // ---- Touch targets, on everything the build makes interactive -------------------------
@@ -381,7 +420,17 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
 
 type Add = (kind: Kind, severity: Severity, detail: string, d?: DesignElement, b?: DesignElement) => void;
 
-function compareStyle(p: Pair, T: FaithfulConfig['tolerances'], color: Tally, style: Tally, add: Add): void {
+function compareStyle(
+  p: Pair,
+  T: FaithfulConfig['tolerances'],
+  color: Tally,
+  style: Tally,
+  addAll: Add,
+  skip?: Set<Kind>,
+): void {
+  const add: Add = (kind, ...rest) => {
+    if (!skip?.has(kind)) addAll(kind, ...rest);
+  };
   const ds: ElementStyle = p.d.style ?? {};
   const bs: ElementStyle = p.b.style ?? {};
   const colour = (kind: Kind, a: string | undefined, b: string | undefined) => {
@@ -434,3 +483,24 @@ function compareStyle(p: Pair, T: FaithfulConfig['tolerances'], color: Tally, st
 }
 
 const round = (n: number): string => (Math.round(n * 10) / 10).toString();
+
+/**
+ * A text colour (or its ground) changed, and the change takes a WCAG 1.4.3 failure in the
+ * design to a pass in the build. Only a threshold CROSSED counts — "a bit more contrast" is
+ * taste, and taste is what the design decided.
+ */
+export function improvedContrast(d: DesignElement, b: DesignElement, groundD: string, groundB: string): string | null {
+  if (!d.text || !b.text) return null;
+  const fd = parseColor(d.style?.color);
+  const fb = parseColor(b.style?.color);
+  const gd = parseColor(groundD);
+  const gb = parseColor(groundB);
+  if (!fd || !fb || !gd || !gb) return null;
+  const size = b.style?.fontSize ?? d.style?.fontSize ?? 16;
+  const bold = (b.style?.fontWeight ?? d.style?.fontWeight ?? 400) >= 700;
+  const need = size >= 24 || (bold && size >= 18.66) ? 3 : 4.5;
+  const cd = contrastRatio(fd, gd);
+  const cb = contrastRatio(fb, gb);
+  if (cd >= need || cb < need) return null;
+  return `contrast ${cd.toFixed(1)}:1 → ${cb.toFixed(1)}:1: the design fails WCAG 1.4.3 (${need}:1), the build passes`;
+}

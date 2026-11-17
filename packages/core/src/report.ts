@@ -90,9 +90,7 @@ export function formatText(r: RunResult, max = 8, resultPath = '.faithful/last.j
   if (info.length) {
     const byKind = new Map<string, number>();
     for (const f of info) byKind.set(f.kind, (byKind.get(f.kind) ?? 0) + 1);
-    out.push(
-      `notes: ${[...byKind].map(([k, n]) => `${k} ×${n}`).join(', ')} (overall offset or faults the design has too) · faithful explain --all`,
-    );
+    out.push(`notes: ${[...byKind].map(([k, n]) => `${k} ×${n}`).join(', ')} · faithful explain --all`);
   }
   if (r.provenance.warnings.length)
     out.push(
