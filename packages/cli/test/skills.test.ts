@@ -8,14 +8,20 @@ import { describe, expect, it } from 'vitest';
 import { SKILLS } from '../src/index.js';
 
 describe('shipped skills', () => {
-  it('there are six, and the core one is among them', () => {
+  it('there are twelve, and the core one is among them', () => {
     expect(Object.keys(SKILLS).sort()).toEqual([
       'faithful',
+      'faithful-accessible-forms',
+      'faithful-data-display',
       'faithful-design-handoff',
+      'faithful-design-tokens',
       'faithful-implement-design',
+      'faithful-no-visual-change',
+      'faithful-responsive',
       'faithful-safe-redesign',
       'faithful-ui-copy',
       'faithful-ui-quality',
+      'faithful-ui-states',
     ]);
   });
 
@@ -28,6 +34,8 @@ describe('shipped skills', () => {
         expect(fm?.[1]?.length).toBeLessThanOrEqual(64);
         expect(fm?.[1]).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
         expect(fm?.[2]?.length).toBeLessThanOrEqual(1024);
+        // Every description is paid for in every session; keep the listing small.
+        expect(fm?.[2]?.length).toBeLessThanOrEqual(420);
         // A description says WHEN to use it, or the skill never loads itself.
         expect(fm?.[2]).toMatch(/\bUse (when|at|before|for)\b|^For /);
       });
