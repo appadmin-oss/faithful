@@ -96,11 +96,28 @@ export function parseViewports(s: string | undefined, fallback: Viewport[]): Vie
   });
 }
 
+export type ColorScheme = 'light' | 'dark';
+
+/**
+ * `--color-scheme`: which `prefers-color-scheme` the page is rendered with. `both` (audit
+ * only) renders every viewport twice. Anything else is a bad call, not a silent light run.
+ */
+export function parseColorScheme(s: string | undefined, allowBoth = false): ColorScheme[] {
+  if (s === undefined || s === '') return ['light'];
+  const v = s.trim().toLowerCase();
+  if (v === 'light' || v === 'dark') return [v];
+  if (v === 'both' && allowBoth) return ['light', 'dark'];
+  throw new FaithfulError(`--color-scheme must be light${allowBoth ? ', dark or both' : ' or dark'}, got "${s}"`);
+}
+
 /** One browser for the whole run, launched only if something needs it. */
 export class Session {
   private renderer: Promise<Renderer> | null = null;
   readonly warnings: string[] = [];
-  constructor(readonly config: FaithfulConfig) {}
+  constructor(
+    readonly config: FaithfulConfig,
+    readonly colorScheme: ColorScheme = 'light',
+  ) {}
 
   browser(): Promise<Renderer> {
     this.renderer ??= Renderer.launch();
@@ -110,7 +127,8 @@ export class Session {
   context(viewports: Viewport[]): ReadContext {
     return {
       viewports,
-      render: async (target, vp, id) => (await this.browser()).capture(target, vp, id, { ignore: this.config.ignore }),
+      render: async (target, vp, id) =>
+        (await this.browser()).capture(target, vp, id, { ignore: this.config.ignore, colorScheme: this.colorScheme }),
       readFile: (p) => readFile(p, 'utf8'),
       exists: async (p) => existsSync(p),
       warn: (m) => this.warnings.push(m),
@@ -160,6 +178,8 @@ export interface VerifyOptions {
   viewports?: string;
   /** Extra conformity sources: a copy deck, a token file, a DESIGN.md. */
   also?: string[];
+  /** `light` (default) or `dark`: design and build are both rendered with it. */
+  colorScheme?: string;
   config?: FaithfulConfig;
   cwd?: string;
 }
@@ -177,7 +197,8 @@ export async function verify(o: VerifyOptions): Promise<RunResult> {
     ...(o.also ? { also: o.also.map(localPath) } : {}),
   };
   const cfg = o.config ?? (await loadConfig(o.cwd));
-  const session = new Session(cfg);
+  const [scheme] = parseColorScheme(o.colorScheme);
+  const session = new Session(cfg, scheme);
   // Every path is read against the caller's folder, as audit and parity read theirs: an MCP
   // server started elsewhere must not compare some other design.html.
   const cwd = o.cwd ?? process.cwd();
@@ -420,6 +441,8 @@ export const AUDIT_VIEWPORTS = '375x812,1440x900';
 export interface AuditRunOptions {
   target: string;
   viewports?: string;
+  /** `light` (default), `dark`, or `both`: every viewport in each, screens labelled `audit@375 dark`. */
+  colorScheme?: string;
   config?: FaithfulConfig;
   cwd?: string;
 }
@@ -428,6 +451,7 @@ export interface AuditRunOptions {
 export async function audit(o: AuditRunOptions): Promise<RunResult> {
   o = { ...o, target: localPath(o.target) };
   const cfg = o.config ?? (await loadConfig(o.cwd));
+  const schemes = parseColorScheme(o.colorScheme, true);
   const session = new Session(cfg);
   try {
     const vps = parseViewports(o.viewports ?? AUDIT_VIEWPORTS, cfg.viewports);
@@ -438,10 +462,15 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
           baseDir: resolve(o.cwd ?? process.cwd(), o.target, '..'),
         };
     const results: ScreenResult[] = [];
-    for (const vp of vps) {
-      const facts = await (await session.browser()).audit(target, vp);
-      results.push(scoreAudit(facts, `audit@${vp.width}`, { minTarget: Math.min(cfg.minTarget, 24) }));
-    }
+    for (const scheme of schemes)
+      for (const vp of vps) {
+        const facts = await (await session.browser()).audit(target, vp, { colorScheme: scheme });
+        // Light is the default and stays unlabelled; a dark (or two-scheme) run says which is which.
+        const named = schemes.length > 1 || scheme === 'dark' ? ` ${scheme}` : '';
+        const r = scoreAudit(facts, `audit@${vp.width}${named}`, { minTarget: Math.min(cfg.minTarget, 24) });
+        if (named) for (const f of r.findings) f.viewport = `${f.viewport}${named}`;
+        results.push(r);
+      }
     mergeViewports(results);
     const provenance = {
       adapter: 'audit',

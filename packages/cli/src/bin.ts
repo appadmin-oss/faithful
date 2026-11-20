@@ -37,8 +37,8 @@ import { init } from './init.js';
 
 const HELP = `faithful — prove a build matches its design
 
-  faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
-  faithful audit <url|file> [--viewports …] judge a page with no design: layout faults, readability, AI-slop tells
+  faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+  faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design: layout faults, contrast, readability, AI-slop tells
   faithful parity --before <a> --after <b>  after a refactor or redesign: can users still do everything they could?
   faithful outline <design|folder>         what a design contains, in a few lines
   faithful spec <design> [--out file]      the design as a Faithful spec (for design agents to ship)
@@ -65,6 +65,7 @@ async function main(argv: string[]): Promise<number> {
       pages: { type: 'string' },
       skills: { type: 'string' },
       viewports: { type: 'string', short: 'v' },
+      'color-scheme': { type: 'string' },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
       max: { type: 'string', default: '' },
@@ -89,6 +90,7 @@ async function main(argv: string[]): Promise<number> {
       const opts: Parameters<typeof verify>[0] = { design, build: v.build, config: cfg };
       if (v.viewports) opts.viewports = v.viewports;
       if (v.also?.length) opts.also = v.also;
+      if (v['color-scheme'] !== undefined) opts.colorScheme = v['color-scheme'];
       const run = await verify(opts);
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
@@ -98,7 +100,12 @@ async function main(argv: string[]): Promise<number> {
     case 'audit': {
       const target = pos[0];
       if (!target) throw new FaithfulError('usage: faithful audit <url|file> [--viewports 375x812,1440x900]');
-      const run = await audit({ target, config: cfg, ...(v.viewports ? { viewports: v.viewports } : {}) });
+      const run = await audit({
+        target,
+        config: cfg,
+        ...(v.viewports ? { viewports: v.viewports } : {}),
+        ...(v['color-scheme'] !== undefined ? { colorScheme: v['color-scheme'] } : {}),
+      });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
       );

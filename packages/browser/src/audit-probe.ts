@@ -408,6 +408,196 @@ export function auditProbe(): AuditFacts {
     ...all.map((e) => /url\("?([^")]+)"?\)/.exec(cs(e).backgroundImage)?.[1] ?? '').filter(Boolean),
   ].slice(0, 200);
 
+  // ── Contrast (WCAG 1.4.3) ─────────────────────────────────────────────────────────
+  // What is DRAWN: the text colour over every background behind it, composited as the browser
+  // does — alpha, and each element's opacity applying to its whole group (text and background
+  // alike). Anything that is not one flat colour behind the words — an image, a gradient, a
+  // video, a filter or blend, an overlay pseudo-element, another box drawn across them — makes
+  // the text UNKNOWN: counted, never judged, never a pass.
+  type P = [number, number, number, number]; // premultiplied r, g, b (0–255) and alpha (0–1)
+  const pm = (c: { r: number; g: number; b: number; a: number }): P => [c.r * c.a, c.g * c.a, c.b * c.a, c.a];
+  const over = (t: P, u: P): P => [
+    t[0] + u[0] * (1 - t[3]),
+    t[1] + u[1] * (1 - t[3]),
+    t[2] + u[2] * (1 - t[3]),
+    t[3] + u[3] * (1 - t[3]),
+  ];
+  const fade = (p: P, o: number): P => [p[0] * o, p[1] * o, p[2] * o, p[3] * o];
+  const flat = (p: P): [number, number, number] => [
+    Math.round(p[0] * 100) / 100,
+    Math.round(p[1] * 100) / 100,
+    Math.round(p[2] * 100) / 100,
+  ];
+  const root = document.documentElement;
+  const meta = document.querySelector('meta[name="color-scheme"]')?.getAttribute('content') ?? '';
+  const declared = cs(root).colorScheme && cs(root).colorScheme !== 'normal' ? cs(root).colorScheme : meta;
+  const prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const darkCanvas = /dark/.test(declared) && (!/light/.test(declared) || prefersDark);
+  const CANVAS: P = darkCanvas ? [18, 18, 18, 1] : [255, 255, 255, 1];
+  const rootBg = rgb(cs(root).backgroundColor);
+  const bodyIsCanvas = (!rootBg || rootBg.a === 0) && cs(root).backgroundImage === 'none';
+  const MEDIA = /^(IMG|VIDEO|CANVAS|SVG|PICTURE|IFRAME|OBJECT|EMBED)$/i;
+  // Boxes that paint something, from the whole document (decorative overlays are often aria-hidden).
+  const painters: { e: Element; r: DOMRect }[] = [];
+  for (const p of Array.from(document.body.querySelectorAll('*'))) {
+    if (painters.length >= 3000) break;
+    const s = cs(p);
+    if (s.display === 'none' || s.visibility !== 'visible') continue;
+    const bg = rgb(s.backgroundColor);
+    if (!MEDIA.test(p.tagName) && s.backgroundImage === 'none' && !(bg && bg.a > 0.02)) continue;
+    const r = p.getBoundingClientRect();
+    if (r.width > 1 && r.height > 1) painters.push({ e: p, r });
+  }
+  const painted = (s: CSSStyleDeclaration) => {
+    if (s.content === 'none' || s.content === 'normal') return false;
+    const bg = rgb(s.backgroundColor);
+    return s.backgroundImage !== 'none' || (!!bg && bg.a > 0.02);
+  };
+  /** The colour behind (and of) text at a point, or why it cannot be one colour. */
+  const drawn = (e: Element, fg: P, x: number, y: number) => {
+    let withText = fg;
+    let without: P = [0, 0, 0, 0];
+    for (let c: Element | null = e; c; c = c.parentElement) {
+      const s = cs(c) as CSSStyleDeclaration & { webkitBackdropFilter?: string };
+      if (s.filter !== 'none') return { why: 'a filter' };
+      if (s.mixBlendMode !== 'normal') return { why: 'a blend mode' };
+      const canvasWide = c === root || (c === document.body && bodyIsCanvas);
+      const r = c.getBoundingClientRect();
+      const under = canvasWide || (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom);
+      const seeThrough = without[3] < 0.999;
+      if (under && seeThrough) {
+        if (s.backgroundImage !== 'none') return { why: 'a background image or gradient' };
+        if (MEDIA.test(c.tagName)) return { why: 'an image or video' };
+        const bf = `${s.backdropFilter ?? 'none'} ${s.webkitBackdropFilter ?? ''}`.replace(/none|blur\([^)]*\)/g, '');
+        if (bf.trim()) return { why: 'a backdrop filter' };
+        for (const pseudo of ['::before', '::after']) {
+          const ps = getComputedStyle(c, pseudo);
+          if (painted(ps) && /absolute|fixed/.test(ps.position)) return { why: 'an overlay pseudo-element' };
+        }
+      }
+      const bg = under ? rgb(s.backgroundColor) : null;
+      if (bg && bg.a > 0) {
+        withText = over(withText, pm(bg));
+        without = over(without, pm(bg));
+      }
+      const o = Number.parseFloat(s.opacity || '1');
+      if (o < 1) {
+        withText = fade(withText, o);
+        without = fade(without, o);
+      }
+    }
+    return { fg: flat(over(withText, CANVAS)), bg: flat(over(without, CANVAS)) };
+  };
+  const textColors: NonNullable<AuditFacts['textColors']> = [];
+  let unknownN = 0;
+  let unknownSel: string | undefined;
+  let unknownWhy: string | undefined;
+  const unknown = (e: Element, why: string) => {
+    unknownN++;
+    if (!unknownSel) {
+      unknownSel = path(e);
+      unknownWhy = why;
+    }
+  };
+  for (const e of leaves) {
+    if (textColors.length >= 1500) break;
+    // Exempt by WCAG 1.4.3: inactive controls, logotypes, and text nobody can see (reported as hidden).
+    if (e.closest(':disabled,[aria-disabled="true"]')) continue;
+    if ((e.closest('label') as HTMLLabelElement | null)?.control?.matches(':disabled')) continue;
+    if (e.closest('[class*="logo" i],[id*="logo" i],[class*="brand" i]')) continue;
+    if (e.closest('select,textarea,option')) continue;
+    if (opacityOf(e) < 0.05) continue;
+    if (e.closest('svg')) {
+      unknown(e, 'SVG text');
+      continue;
+    }
+    const s = cs(e) as CSSStyleDeclaration & { webkitTextFillColor?: string; webkitBackgroundClip?: string };
+    const fill = rgb(s.webkitTextFillColor || s.color) ?? rgb(s.color);
+    if (!fill || fill.a === 0 || /text/.test(`${s.backgroundClip} ${s.webkitBackgroundClip ?? ''}`)) {
+      unknown(e, 'transparent or clipped text');
+      continue;
+    }
+    const boxes = glyphs(e);
+    const first = boxes[0];
+    if (!first) continue;
+    // Anything else drawn across the words: a hero image behind them, a positioned blob.
+    const across = painters.find(
+      ({ e: p, r }) =>
+        !p.contains(e) &&
+        !e.contains(p) &&
+        boxes.some(
+          (b) =>
+            Math.min(b.right, r.right) - Math.max(b.left, r.left) > 2 &&
+            Math.min(b.bottom, r.bottom) - Math.max(b.top, r.top) > 2,
+        ),
+    );
+    if (across) {
+      unknown(e, `${path(across.e)} is drawn across it`);
+      continue;
+    }
+    const d = drawn(e, pm(fill), first.left + first.width / 2, first.top + first.height / 2);
+    if (!d.fg || !d.bg) {
+      unknown(e, d.why ?? 'unresolved');
+      continue;
+    }
+    const stroke = Number.parseFloat((s as unknown as Record<string, string>).webkitTextStrokeWidth ?? '0') || 0;
+    textColors.push({
+      sel: path(e),
+      text: short(ownText(e), 40),
+      fg: d.fg,
+      bg: d.bg,
+      size: Number.parseFloat(s.fontSize),
+      weight: Number.parseFloat(s.fontWeight) || 400,
+      ...(s.textShadow !== 'none' || stroke > 0 ? { shadow: true } : {}),
+    });
+  }
+  const contrastUnknown: AuditFacts['contrastUnknown'] = {
+    n: unknownN,
+    ...(unknownSel ? { sel: unknownSel } : {}),
+    ...(unknownWhy ? { why: unknownWhy } : {}),
+  };
+
+  // A dark theme whose root never said so: the browser keeps native controls light. A control
+  // that follows a color-scheme (its own or the root's) gets a dark field colour: not counted.
+  let lightControls: AuditFacts['lightControls'];
+  if (prefersDark) {
+    let darkRules = false;
+    const scan = (rules: CSSRuleList, depth: number): void => {
+      for (const rule of Array.from(rules)) {
+        if (darkRules || depth > 4) return;
+        const cond = (rule as CSSMediaRule).conditionText ?? (rule as CSSMediaRule).media?.mediaText ?? '';
+        if (/prefers-color-scheme\s*:\s*dark/.test(cond)) darkRules = true;
+        else if ((rule as CSSGroupingRule).cssRules) scan((rule as CSSGroupingRule).cssRules, depth + 1);
+      }
+    };
+    for (const sheet of Array.from(document.styleSheets)) {
+      if (/prefers-color-scheme\s*:\s*dark/.test(sheet.media?.mediaText ?? '')) darkRules = true;
+      try {
+        if (!darkRules) scan(sheet.cssRules, 0);
+      } catch {
+        /* a cross-origin sheet cannot be read */
+      }
+      if (darkRules) break;
+    }
+    if (darkRules) {
+      const lum = (p: [number, number, number]) => (0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]) / 255;
+      const light = Array.from(
+        document.body.querySelectorAll(
+          'input:not([type=hidden]):not([type=checkbox]):not([type=radio]),select,textarea,button',
+        ),
+      ).filter((c) => {
+        if (!shown(c) || ariaHidden(c)) return false;
+        const own = rgb(cs(c).backgroundColor);
+        if (!own || own.a < 0.5 || lum([own.r, own.g, own.b]) < 0.6) return false;
+        const r = c.getBoundingClientRect();
+        const p = c.parentElement;
+        const d = p ? drawn(p, [0, 0, 0, 0], r.left + r.width / 2, r.top + r.height / 2) : null;
+        return !!d?.bg && lum(d.bg) < 0.25;
+      });
+      if (light[0]) lightControls = { n: light.length, sel: path(light[0]) };
+    }
+  }
+
   // ── The tells ─────────────────────────────────────────────────────────────────────
   const isCard = (e: Element) => {
     const s = cs(e);
@@ -562,6 +752,9 @@ export function auditProbe(): AuditFacts {
     landmarks,
     headings,
     fontSizes,
+    textColors,
+    contrastUnknown,
+    ...(lightControls ? { lightControls } : {}),
     texts,
     imageSrcs,
     slop: {

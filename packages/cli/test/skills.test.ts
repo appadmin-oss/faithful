@@ -8,10 +8,11 @@ import { describe, expect, it } from 'vitest';
 import { SKILLS } from '../src/index.js';
 
 describe('shipped skills', () => {
-  it('there are twelve, and the core one is among them', () => {
+  it('there are thirteen, and the core one is among them', () => {
     expect(Object.keys(SKILLS).sort()).toEqual([
       'faithful',
       'faithful-accessible-forms',
+      'faithful-dark-mode',
       'faithful-data-display',
       'faithful-design-handoff',
       'faithful-design-tokens',

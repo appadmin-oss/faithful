@@ -63,6 +63,10 @@ export function createServer(cwd = process.cwd()): McpServer {
           .optional()
           .describe('Extra sources checked for conformity: tokens, copy deck, DESIGN.md'),
         max: z.number().int().min(1).max(50).optional().describe('Findings listed (default 8)'),
+        colorScheme: z
+          .enum(['light', 'dark'])
+          .optional()
+          .describe('prefers-color-scheme to render with (default light)'),
       }),
       outputSchema: z
         .object({
@@ -75,7 +79,7 @@ export function createServer(cwd = process.cwd()): McpServer {
         .passthrough(),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ design, build, viewports, also, max }) =>
+    async ({ design, build, viewports, also, max, colorScheme }) =>
       guarded(async () => {
         const run = await verify({
           design,
@@ -84,6 +88,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           config: await loadConfig(cwd),
           ...(viewports ? { viewports } : {}),
           ...(also?.length ? { also } : {}),
+          ...(colorScheme ? { colorScheme } : {}),
         });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
@@ -97,17 +102,24 @@ export function createServer(cwd = process.cwd()): McpServer {
     {
       title: 'Audit a page with no design',
       description:
-        'Judge a page (URL or HTML file) on its own at phone and desktop width: clipped/overlapping text, sideways scroll, broken images, unrendered values, readability, wording, AI-slop tells.',
+        'Judge a page (URL or HTML file) on its own at phone and desktop width: clipped/overlapping text, sideways scroll, broken images, unrendered values, text contrast, readability, wording, AI-slop tells.',
       inputSchema: z.object({
         target: z.string().describe('URL or HTML file path'),
         viewports: z.string().optional().describe('Default "375x812,1440x900"'),
+        colorScheme: z.enum(['light', 'dark', 'both']).optional().describe('Default light; both = each viewport twice'),
         max: z.number().int().min(1).max(50).optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ target, viewports, max }) =>
+    async ({ target, viewports, colorScheme, max }) =>
       guarded(async () => {
-        const run = await audit({ target, cwd, config: await loadConfig(cwd), ...(viewports ? { viewports } : {}) });
+        const run = await audit({
+          target,
+          cwd,
+          config: await loadConfig(cwd),
+          ...(viewports ? { viewports } : {}),
+          ...(colorScheme ? { colorScheme } : {}),
+        });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
           structuredContent: formatCompact(run, max ?? 8),

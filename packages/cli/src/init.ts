@@ -42,7 +42,7 @@ export const AGENTS_BLOCK = `<!-- faithful:begin -->
 - Before committing UI: \`npx @faithful/cli guard\`. Never loosen faithful.config.json or faithful.baseline.json to pass.
 - Refactoring or redesigning working UI: \`npx @faithful/cli parity --before <old> --after <new>\` after every step; nothing may be lost.
 - Upgrades meant to change nothing (Tailwind, React, a UI library): \`npx @faithful/cli verify <old-url> --build <new-url>\` per page; every difference is a finding.
-- Skills in .agents/skills/ — read the one that fits before starting: faithful-implement-design (build from a design), faithful-ui-quality (no design), faithful-ui-states (loading/empty/error), faithful-responsive (mobile, every width), faithful-accessible-forms (forms, keyboard, a11y), faithful-data-display (dashboards, tables), faithful-design-tokens (use the design system), faithful-no-visual-change (upgrades, migrations), faithful-safe-redesign (refactor/redesign), faithful-ui-copy (wording), faithful-design-handoff (design agents).
+- Skills in .agents/skills/ — read the one that fits before starting: faithful-implement-design (build from a design), faithful-ui-quality (no design), faithful-ui-states (loading/empty/error), faithful-responsive (mobile, every width), faithful-accessible-forms (forms, keyboard, a11y), faithful-dark-mode (dark theme, contrast), faithful-data-display (dashboards, tables), faithful-design-tokens (use the design system), faithful-no-visual-change (upgrades, migrations), faithful-safe-redesign (refactor/redesign), faithful-ui-copy (wording), faithful-design-handoff (design agents).
 <!-- faithful:end -->`;
 
 export async function init(cwd = process.cwd(), only?: string[]): Promise<string[]> {

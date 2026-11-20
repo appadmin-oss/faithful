@@ -90,6 +90,32 @@ describe('faithful-mcp over stdio', () => {
 
       const bad = await c.call('tools/call', { name: 'faithful_outline', arguments: { design: 'nope.xyz' } });
       expect(bad.result.isError).toBe(true);
+
+      // colorScheme reaches the renderer: text that vanishes only in dark is caught only in dark.
+      writeFileSync(
+        join(dir, 'theme.html'),
+        '<!doctype html><html lang="en"><head><title>t</title><style>body{background:#fff;color:#111;font:17px/1.5 Georgia}@media (prefers-color-scheme: dark){body{background:#151515}}</style></head><body><main><p>Readable only in the light theme.</p></main></body></html>',
+      );
+      const light = await c.call('tools/call', {
+        name: 'faithful_audit',
+        arguments: { target: 'theme.html', viewports: '800x600' },
+      });
+      expect(light.result.content[0].text).toMatch(/^faithful PASS/);
+      const dark = await c.call('tools/call', {
+        name: 'faithful_audit',
+        arguments: { target: 'theme.html', viewports: '800x600', colorScheme: 'dark' },
+      });
+      expect(dark.result.structuredContent.top.map((f: { k: string }) => f.k)).toEqual(['contrast']);
+      const darkVerify = await c.call('tools/call', {
+        name: 'faithful_verify',
+        arguments: { design: 'design.html', build: 'design.html', viewports: '800x600', colorScheme: 'dark' },
+      });
+      expect(darkVerify.result.content[0].text).toMatch(/^faithful PASS/);
+      const wrong = await c.call('tools/call', {
+        name: 'faithful_audit',
+        arguments: { target: 'theme.html', colorScheme: 'sepia' },
+      });
+      expect(wrong.result.isError).toBe(true);
     } finally {
       c.close();
     }

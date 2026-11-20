@@ -40,6 +40,30 @@ export interface AuditFacts {
   landmarks: string[];
   headings: { sel: string; level: number; text: string }[];
   fontSizes: number[];
+  /**
+   * Each visible text's colour and the colour behind it, both as DRAWN (alpha, background
+   * layers and every ancestor's opacity composited), as sRGB triples. Judged by `scoreAudit`.
+   * `shadow`: the text has a shadow or stroke, which may be what makes it readable.
+   */
+  textColors?: {
+    sel: string;
+    text: string;
+    fg: [number, number, number];
+    bg: [number, number, number];
+    size: number;
+    weight: number;
+    shadow?: boolean;
+  }[];
+  /**
+   * Texts whose background could not be resolved to one colour (an image, a gradient, a video,
+   * a filter or blend, another box painted under the words): never judged, never a pass.
+   */
+  contrastUnknown?: { n: number; sel?: string; why?: string };
+  /**
+   * Dark preference, the page has `prefers-color-scheme: dark` styles, but its root never
+   * opted into `color-scheme: dark`: native form controls drawn light on a dark surface.
+   */
+  lightControls?: { n: number; sel: string };
   texts: { sel: string; text: string }[];
   imageSrcs: string[];
   slop: {

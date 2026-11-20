@@ -8,7 +8,7 @@ what to do next, in order.
 
 - **Code:** `main` on GitHub at [appadmin-oss/faithful](https://github.com/appadmin-oss/faithful).
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
-- **Health:** `pnpm install && pnpm check` → lint clean, build, 195 tests, selftest — all green.
+- **Health:** `pnpm install && pnpm check` → lint clean, build, 212 tests, selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **Not published to npm.** The scope `@faithful` must be created on npmjs.com first. The
   unscoped name `faithful` belongs to an unrelated package: never tell anyone to run
@@ -28,7 +28,7 @@ what to do next, in order.
 | `faithful.deviations.json` | Intended changes with reason, owner, expiry; covered findings become notes; expired entries cover nothing; stale entries are reported; a bad entry is exit 2 | `advance.test.ts`, `packages/cli/test/bin.test.ts` |
 | `audit <url\|file>` | A page with no design, at 375 and 1440: clipped/overlapping/covered text, sideways scroll, broken images, script errors, failed requests, unrendered values, lorem/dummy data, invisible content, readability, small targets, too many sizes, wording, AI-slop tells scored by co-occurrence | `fixtures/audit/slop.html` (every planted fault, once) and `clean.html` (nothing); `packages/core/test/audit.test.ts` |
 | `parity --before <a> --after <b>` | Refactor/redesign: every link, button, form field name, landmark, route still there; looks ignored; renames flagged; self-check plants a loss before trusting itself | `fixtures/parity/` (a re-skin passes, four planted losses caught); `packages/core/test/parity.test.ts` |
-| Twelve Agent Skills | `faithful`, `faithful-implement-design`, `faithful-ui-quality`, `faithful-safe-redesign`, `faithful-ui-copy`, `faithful-design-handoff`, `faithful-ui-states`, `faithful-responsive`, `faithful-accessible-forms`, `faithful-data-display`, `faithful-design-tokens`, `faithful-no-visual-change` in `packages/cli/skills/` (why: `docs/research/skills-2026-11.md`); installed by `init` (`--skills a,b` for a subset) | `packages/cli/test/skills.test.ts` (spec limits, a proving command, no `npx faithful`) |
+| Thirteen Agent Skills | `faithful`, `faithful-implement-design`, `faithful-ui-quality`, `faithful-safe-redesign`, `faithful-ui-copy`, `faithful-design-handoff`, `faithful-ui-states`, `faithful-responsive`, `faithful-accessible-forms`, `faithful-data-display`, `faithful-design-tokens`, `faithful-no-visual-change`, `faithful-dark-mode` in `packages/cli/skills/` (why: `docs/research/skills-2026-11.md`); installed by `init` (`--skills a,b` for a subset) | `packages/cli/test/skills.test.ts` (spec limits, a proving command, no `npx faithful`) |
 | `outline`, `spec`, `explain`, `guard`, `selftest`, `formats`, `doctor`, `init` | See `README.md` | `packages/cli/test/bin.test.ts` |
 | MCP server (`@faithful/mcp`) | Six tools: outline, verify, audit, parity, explain, guard | `packages/mcp/test/stdio.test.ts` (real stdio) |
 
@@ -98,9 +98,9 @@ then breadth.
 3. **Run axe-core inside `audit`** (`@axe-core/playwright`, MPL-2.0; enable the `wcag22aa` tag
    or `target-size` stays off). Treat its "needs review" as review items, not passes. This
    alone closes most of the accessibility gap with the leaders.
-4. **Text contrast in `audit` (WCAG 1.4.3)** — the commonest failure in AI-built sites. Walk
-   ancestors for the background; text over an image or gradient is "cannot determine", never a
-   pass. Then a dark-mode pass when the CSS has `prefers-color-scheme`.
+4. ~~Text contrast in `audit`~~ — done 20 Nov 2026, with `--color-scheme light|dark|both`.
+   Left: text over images/gradients and overlapping boxes is "not judged" (no layer order
+   yet); placeholders and pseudo-element text are not measured; logos are exempt by class name.
 5. **Measure parity on one real redesign** (the owner's NextGenGen update is the natural case):
    before/after URLs, every finding checked by hand, false alarms fixed with a test each.
 6. **Canvas reader** (`packages/adapters`): one screen per board at its own `w` (height 900, or

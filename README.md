@@ -41,11 +41,18 @@ faithful PASS clean · 100% match · placed · web/html
 $ npx @faithful/cli audit http://localhost:3000
 ```
 
-Judges a page on its own, at a phone and a desktop width, and reports each fault once:
+Judges a page on its own, at a phone and a desktop width, and reports each fault once.
+`--color-scheme dark` renders it with `prefers-color-scheme: dark`; `--color-scheme both` runs
+every width in each theme and labels the screens (`audit@375 dark`).
 
 - **Faults a user cannot get past:** text cut off by its box or drawn over other text, a page
   that scrolls sideways on a phone, broken images, script errors, `undefined` /
   `[object Object]` / `{{ x }}` printed where a value should be, lorem ipsum.
+- **Contrast (WCAG 1.4.3):** text under 4.5:1 (3:1 for 24px, or bold 18.66px) against the
+  colour actually drawn behind it — alpha, stacked backgrounds and opacity composited. One
+  finding per colour pair and size, with a count. Text over an image, gradient, video, filter
+  or blend is "not judged" (one note), never a pass. In dark mode, a page with dark styles but
+  no `color-scheme` is flagged for leaving native form controls light.
 - **Reading:** lines longer than 75 characters, tight line height, small body text, targets
   under 24px, more than ten font sizes.
 - **Wording:** links named "click here", a row of "Learn more" links to different places,
@@ -122,7 +129,7 @@ Findings come back root-cause first: missing, copy and size before the positions
 npx @faithful/cli init
 ```
 
-writes `faithful.config.json`, twelve Agent Skills under `.agents/skills/` (see [Skills](#skills)),
+writes `faithful.config.json`, thirteen Agent Skills under `.agents/skills/` (see [Skills](#skills)),
 and a short block in `AGENTS.md`, because a skill does not always load itself.
 
 Or attach the MCP server: six tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
@@ -139,7 +146,7 @@ kind rather than once per finding, and the full result stays in `.faithful/last.
 
 ## Skills
 
-`npx @faithful/cli init` installs twelve Agent Skills into `.agents/skills/` (read by Claude Code,
+`npx @faithful/cli init` installs thirteen Agent Skills into `.agents/skills/` (read by Claude Code,
 Codex, Cursor, Copilot, Gemini CLI and others). Each teaches one job and ends in the command
 that proves it was done:
 
@@ -154,19 +161,20 @@ that proves it was done:
 | `faithful-ui-states` | Every state of a screen, not just the happy path: loading, empty, error, no permission, worst-case content — each audited on its own URL |
 | `faithful-responsive` | Every width from 320px to desktop: the causes of sideways scroll, viewport units, safe areas, targets — audited across five widths |
 | `faithful-accessible-forms` | Forms and custom controls everyone can use: native elements, labels, autofill, GOV.UK-style errors, visible focus |
+| `faithful-dark-mode` | A dark theme that is readable and complete: `color-scheme`, semantic tokens, contrast in both themes, shadows, icons, the toggle — audited with `--color-scheme both` |
 | `faithful-data-display` | Dashboards, tables and KPIs with real, formatted numbers and honest empty states |
 | `faithful-design-tokens` | Reusing the design system's tokens and components instead of hardcoding values, proven by `guard` and `verify` against the tokens |
 | `faithful-no-visual-change` | Upgrades and migrations that must change nothing on screen: the old build is the design, `verify` per page |
 
 `--skills faithful,faithful-ui-copy` installs only those. The source is
-[`packages/cli/skills/`](packages/cli/skills/); why these twelve, and what was left out, is in
+[`packages/cli/skills/`](packages/cli/skills/); why these thirteen, and what was left out, is in
 [`docs/research/skills-2026-11.md`](docs/research/skills-2026-11.md).
 
 ## Commands
 
 ```
-faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--format text|json] [--max 8]
-faithful audit <url|file> [--viewports …]  judge a page with no design
+faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design
 faithful parity --before <a> --after <b> [--pages /,/x]  after a refactor or redesign: nothing lost
 faithful outline <design|folder>       what a design contains, in a few lines
 faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)

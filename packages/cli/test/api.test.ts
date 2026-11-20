@@ -16,6 +16,7 @@ import {
   init,
   lastRun,
   loadConfig,
+  parseColorScheme,
   parseMax,
   SKILL,
   verify,
@@ -49,6 +50,17 @@ const screen = (els: DesignElement[]): Screen => ({
   name: 's',
   viewport: { width: 1280, height: 800 },
   elements: els,
+});
+
+describe('--color-scheme', () => {
+  it('light (default), dark, or both for audit only; anything else is a bad call', () => {
+    expect(parseColorScheme(undefined)).toEqual(['light']);
+    expect(parseColorScheme('Dark')).toEqual(['dark']);
+    expect(parseColorScheme('both', true)).toEqual(['light', 'dark']);
+    expect(() => parseColorScheme('both')).toThrow(FaithfulError);
+    for (const bad of ['sepia', 'no-preference', ' '])
+      expect(() => parseColorScheme(bad, true), bad).toThrow(/--color-scheme must be light, dark or both/);
+  });
 });
 
 describe('--max', () => {

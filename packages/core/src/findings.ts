@@ -42,6 +42,8 @@ export const KINDS = {
   overlap: 'Separate them: text drawn over text, or covered by another element, cannot be read.',
   placeholder: 'Replace the placeholder or the unrendered value with real content.',
   hidden: 'Content is invisible until a script reveals it; show it by default and animate only as an enhancement.',
+  contrast:
+    'Raise text contrast to 4.5:1 (3:1 at 24px+, or bold 18.66px+) in every theme; a dark theme also needs color-scheme set.',
   readability: 'Keep body text 50–75 characters per line, line height about 1.5, size at least 16px on phones.',
   'type-scale': 'Use fewer font sizes, from one type scale.',
   wording: 'Say what happens or where it goes, one name per action, one capitalisation style, no shouting.',

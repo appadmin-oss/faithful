@@ -1,5 +1,6 @@
 import type { Provenance } from '@faithful/spec';
 import { describe, expect, it } from 'vitest';
+import { scoreAudit } from '../src/audit.js';
 import { compareScreens } from '../src/compare.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
 import { explain, formatCompact, formatText, summarise } from '../src/report.js';
@@ -52,6 +53,58 @@ describe('report', () => {
     const act = withNotes.findings.filter((f) => f.severity !== 'info').length;
     expect(formatText(withNotes)).toContain(`+${act - 8} more`);
     expect(formatText(withNotes)).not.toContain(`+${withNotes.findings.length - 8} more`);
+    expect(tokens(JSON.stringify(formatCompact(r)))).toBeLessThan(600);
+  });
+
+  it('a page with 40 low-contrast texts in 40 colours stays under the same ceiling', () => {
+    const base = scoreAudit(
+      {
+        viewport: { width: 375, height: 812 },
+        url: 'http://x.test/',
+        scrollWidth: 375,
+        overflow: [],
+        clipped: [],
+        overlaps: [],
+        covered: [],
+        brokenImages: [],
+        invisible: [],
+        paragraphs: [],
+        targets: [],
+        controls: [],
+        forms: [],
+        landmarks: [],
+        headings: [],
+        fontSizes: [16],
+        texts: [],
+        imageSrcs: [],
+        textColors: Array.from({ length: 40 }, (_, i) => ({
+          sel: `main>section:nth-of-type(${i + 1})>p.caption`,
+          text: `A fairly long caption number ${i} that is too pale`,
+          fg: [150 + i, 150 + i, 150 + i] as [number, number, number],
+          bg: [255, 255, 255] as [number, number, number],
+          size: 14,
+          weight: 400,
+        })),
+        contrastUnknown: { n: 12, sel: 'h1', why: 'a background image or gradient' },
+        slop: {
+          gradientText: [],
+          glass: [],
+          glow: [],
+          emojiIcons: [],
+          sideStripes: [],
+          nestedCards: [],
+          badgeAboveH1: null,
+          iconTiles: 0,
+          cardGrids: 0,
+          accentHues: [],
+          fonts: [],
+        },
+      },
+      'audit@375',
+    );
+    const r = summarise([base], prov, 'audit', 0);
+    expect(r.findings.filter((f) => f.kind === 'contrast')).toHaveLength(8);
+    expect(tokens(formatText(r))).toBeLessThan(400);
     expect(tokens(JSON.stringify(formatCompact(r)))).toBeLessThan(600);
   });
 

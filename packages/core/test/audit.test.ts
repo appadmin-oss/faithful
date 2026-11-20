@@ -184,4 +184,83 @@ describe('scoreAudit', () => {
     expect(k({ texts: [{ sel: 'p', text: 'Fill in the the form' }] })[0]).toMatch(/repeated word "the the"/);
     expect(k({ texts: [{ sel: 'p', text: 'She said that that was fine' }] })).toEqual([]);
   });
+
+  describe('contrast (WCAG 1.4.3)', () => {
+    type TC = NonNullable<AuditFacts['textColors']>[number];
+    const grey = (v: number): [number, number, number] => [v, v, v];
+    const W = grey(255);
+    const tc = (fg: number, size = 16, weight = 400, over: Partial<TC> = {}): TC => ({
+      sel: `p.g${fg}`,
+      text: `grey ${fg}`,
+      fg: grey(fg),
+      bg: W,
+      size,
+      weight,
+      ...over,
+    });
+    const run = (textColors: TC[], over: Partial<AuditFacts> = {}) =>
+      scoreAudit(clean({ textColors, ...over }), 's').findings.filter((x) => x.kind === 'contrast');
+
+    it('4.5:1 for body text, exactly at the line: #767676 passes, #777777 (4.48:1) fails and is not printed as 4.5', () => {
+      expect(run([tc(0x76)])).toEqual([]);
+      const [f] = run([tc(0x77)]);
+      expect(f?.severity).toBe('warn');
+      expect(f?.detail).toBe('"grey 119" #777777 on #ffffff is 4.47:1 at 16px; needs 4.5:1');
+    });
+
+    it('large text needs 3:1: 24px, or bold from 18.66px; 18px bold and 23px regular are not large', () => {
+      expect(run([tc(0x88, 24)])).toEqual([]);
+      expect(run([tc(0x88, 18.67, 700)])).toEqual([]);
+      expect(run([tc(0x88, 18, 700)])).toHaveLength(1);
+      expect(run([tc(0x88, 23, 400)])).toHaveLength(1);
+      // Under 3:1 fails at any size: an error.
+      expect(run([tc(0xaa, 32)])[0]?.severity).toBe('error');
+    });
+
+    it('one finding per colour pair and size, with a count; forty grey captions are one fault', () => {
+      const many = Array.from({ length: 40 }, (_, i) => tc(0xaa, 14, 400, { sel: `li:nth-of-type(${i + 1})` }));
+      const f = run([...many, tc(0x99, 14), tc(0xaa, 20)]);
+      expect(f.map((x) => x.detail.replace(/^"[^"]*" /, ''))).toEqual([
+        '#aaaaaa on #ffffff is 2.32:1 at 14px; needs 4.5:1 (×40 texts)',
+        '#aaaaaa on #ffffff is 2.32:1 at 20px; needs 4.5:1',
+        '#999999 on #ffffff is 2.84:1 at 14px; needs 4.5:1',
+      ]);
+    });
+
+    it('past six pairs, the rest are one finding', () => {
+      const pairs = Array.from({ length: 10 }, (_, i) => tc(0x90 + i * 4));
+      const f = run(pairs);
+      expect(f).toHaveLength(7);
+      expect(f[6]?.detail).toMatch(/^4 more low-contrast colour pairs \(4 texts\)/);
+    });
+
+    it('a failing text with a shadow, and unmeasurable text, are one note, never a pass or a fault', () => {
+      const f = run([tc(0xcc, 16, 400, { shadow: true })], {
+        contrastUnknown: { n: 2, sel: 'h1', why: 'a background image or gradient' },
+      });
+      expect(f.map((x) => `${x.severity}:${x.detail}`)).toEqual([
+        'info:contrast not judged for 3 texts (a background image or gradient): check by eye',
+      ]);
+      // A shadowed text that passes on its own needs no excuse.
+      expect(run([tc(0x33, 16, 400, { shadow: true })])).toEqual([]);
+    });
+
+    it('native controls drawn light under dark styles are a warning', () => {
+      const f = run([], { lightControls: { n: 2, sel: 'input' } });
+      expect(f.map((x) => x.severity)).toEqual(['warn']);
+      expect(f[0]?.detail).toMatch(/2 native form controls are drawn light.*color-scheme/);
+    });
+
+    it('the same pair at two widths is one finding, even when the count differs', () => {
+      const a = scoreAudit(clean({ textColors: [tc(0xaa), tc(0xaa)] }), 'a');
+      const b = scoreAudit(
+        clean({ viewport: { width: 1440, height: 900 }, textColors: [tc(0xaa), tc(0xaa), tc(0xaa)] }),
+        'b',
+      );
+      mergeViewports([a, b]);
+      const all = [...a.findings, ...b.findings].filter((x) => x.kind === 'contrast');
+      expect(all).toHaveLength(1);
+      expect(all[0]?.viewport).toBe('375x812,1440x900');
+    });
+  });
 });

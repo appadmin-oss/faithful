@@ -17,6 +17,7 @@
  * the tells.
  */
 import type { AuditFacts } from './audit-facts.js';
+import { contrastRatio, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
 import type { Finding, Kind, Severity } from './findings.js';
 
@@ -165,6 +166,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
         small[0]?.sel,
       );
   }
+  contrastFindings(f, add);
   // WCAG 2.5.8: 24×24, unless the target is spaced well clear of every other one.
   for (const t of f.targets.filter((t) => (t.w < minTarget || t.h < minTarget) && !t.spaced).slice(0, 6)) {
     add(
@@ -324,6 +326,76 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   };
 }
 
+/** WCAG 1.4.3 "large text": 18pt (24px), or 14pt (18.66px) bold. */
+export const isLargeText = (size: number, weight: number): boolean => size >= 24 || (size >= 18.66 && weight >= 700);
+
+/**
+ * WCAG 1.4.3, text contrast: 4.5:1, or 3:1 for large text. One finding per distinct text
+ * colour, background and size, with how many texts share it — forty grey captions are one
+ * thing to fix. Under 3:1 fails at every size, so it is an error; between 3:1 and 4.5:1 a
+ * warning. A text with a shadow or a stroke that fails is not judged (the halo may be what
+ * makes it readable); it joins the texts that could not be measured, reported as one note.
+ */
+function contrastFindings(
+  f: AuditFacts,
+  add: (kind: Kind, severity: Severity, detail: string, buildId?: string, label?: string) => void,
+): void {
+  const groups = new Map<string, { sel: string; text: string; ratio: number; need: number; n: number; size: number }>();
+  let unknown = f.contrastUnknown?.n ?? 0;
+  let unknownSel = f.contrastUnknown?.sel;
+  const rgba = (c: [number, number, number]): Rgba => ({ r: c[0], g: c[1], b: c[2], a: 1 });
+  for (const t of f.textColors ?? []) {
+    const need = isLargeText(t.size, t.weight) ? 3 : 4.5;
+    const ratio = contrastRatio(rgba(t.fg), rgba(t.bg));
+    if (ratio >= need) continue;
+    if (t.shadow) {
+      unknown++;
+      unknownSel ??= t.sel;
+      continue;
+    }
+    const size = Math.round(t.size * 10) / 10;
+    const key = `${toHex(rgba(t.fg))} on ${toHex(rgba(t.bg))}|${size}|${need}`;
+    const g = groups.get(key);
+    if (g) g.n++;
+    else groups.set(key, { sel: t.sel, text: t.text, ratio, need, n: 1, size });
+  }
+  const worst = [...groups].sort((a, b) => a[1].ratio - b[1].ratio);
+  const MAX = 6;
+  for (const [key, g] of worst.slice(0, MAX)) {
+    // Floored, never rounded up: 4.496 must not print as the 4.5 it fails to reach.
+    const r = Math.floor(g.ratio * 100) / 100;
+    add(
+      'contrast',
+      g.ratio < 3 ? 'error' : 'warn',
+      `"${g.text}" ${key.split('|')[0]} is ${r}:1 at ${g.size}px; needs ${g.need}:1${g.n > 1 ? ` (×${g.n} texts)` : ''}`,
+      g.sel,
+    );
+  }
+  if (worst.length > MAX) {
+    const rest = worst.slice(MAX);
+    add(
+      'contrast',
+      rest.some(([, g]) => g.ratio < 3) ? 'error' : 'warn',
+      `${rest.length} more low-contrast colour pairs (${rest.reduce((n, [, g]) => n + g.n, 0)} texts), e.g. "${rest[0]?.[1].text}"`,
+      rest[0]?.[1].sel,
+    );
+  }
+  if (unknown)
+    add(
+      'contrast',
+      'info',
+      `contrast not judged for ${unknown} text${unknown === 1 ? '' : 's'} (${f.contrastUnknown?.why && unknownSel === f.contrastUnknown.sel ? f.contrastUnknown.why : 'a shadow or stroke'}): check by eye`,
+      unknownSel,
+    );
+  if (f.lightControls)
+    add(
+      'contrast',
+      'warn',
+      `dark theme: ${f.lightControls.n} native form control${f.lightControls.n === 1 ? ' is' : 's are'} drawn light: the page has prefers-color-scheme: dark styles but never sets color-scheme (add \`:root { color-scheme: light dark }\`)`,
+      f.lightControls.sel,
+    );
+}
+
 /**
  * One finding per fault, not one per viewport: the same clipped label at a phone and a desktop
  * width is one thing to fix. Where the "reads as generated" summary differs between widths,
@@ -342,7 +414,12 @@ export function mergeViewports(results: ScreenResult[]): void {
         summary = { f, n, owner: r };
         return true;
       }
-      const key = `${f.kind}|${f.buildId ?? ''}|${f.detail.replace(/\d+px wide in a \d+px screen/, '')}`;
+      // Counts that differ by width (how many texts share a colour) do not make a second fault.
+      const detail = f.detail.replace(
+        /\d+px wide in a \d+px screen|×\d+ texts|for \d+ texts?|\d+ more|\(\d+ texts\)/g,
+        '#',
+      );
+      const key = `${f.kind}|${f.buildId ?? ''}|${detail}`;
       const first = seen.get(key);
       if (first) {
         if (f.viewport && first.viewport && !first.viewport.includes(f.viewport)) first.viewport += `,${f.viewport}`;

@@ -29,9 +29,10 @@ npx @faithful/cli verify <design> --build <url-or-file> [--viewports 1440x900,39
 ## A page with no design (or before calling any UI done)
 
 `npx @faithful/cli audit <url-or-file>` — at phone and desktop width: text cut off or drawn
-over text, sideways scroll, broken images, `undefined` on the page, readability, vague link
-and button wording, and the tells of generated UI. Fix every E; treat "reads as generated" as
-a design problem to solve, not a style to keep.
+over text, sideways scroll, broken images, `undefined` on the page, text contrast,
+readability, vague link and button wording, and the tells of generated UI. Fix every E; treat
+"reads as generated" as a design problem to solve, not a style to keep. A page with a dark
+theme: add `--color-scheme both` (also `--color-scheme dark` on `verify`).
 
 ## Refactoring or redesigning something that already works
 

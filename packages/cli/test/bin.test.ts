@@ -40,6 +40,36 @@ describe('faithful (bin)', () => {
     expect(run(d, 'frobnicate').code).toBe(2);
   }, 120_000);
 
+  it('--color-scheme: dark-only faults are caught in dark and in both, labelled by scheme; a bad value is exit 2', () => {
+    const d = tmp();
+    writeFileSync(
+      join(d, 'theme.html'),
+      '<!doctype html><html lang="en"><head><title>t</title><style>body{background:#fff;color:#111;font:17px/1.5 Georgia}@media (prefers-color-scheme: dark){body{background:#151515}}</style></head><body><main><p>Readable only in the light theme.</p></main></body></html>',
+    );
+    expect(run(d, 'audit', 'theme.html', '--viewports', '800x600').code).toBe(0);
+    expect(run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'light').code).toBe(0);
+    const dark = run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'dark');
+    expect(dark.code).toBe(1);
+    expect(dark.out).toMatch(/E contrast: "Readable only in the light theme\." #111111 on #151515/);
+    const both = run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'both');
+    expect(both.code).toBe(1);
+    const last = JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8'));
+    expect(last.screens.map((s: { screen: string }) => s.screen)).toEqual(['audit@800 light', 'audit@800 dark']);
+    expect(run(d, 'explain', 'F1').out).toContain('screen: audit@800 dark at 800x600 dark');
+    expect(run(d, 'audit', 'theme.html', '--color-scheme', 'sepia').code).toBe(2);
+    // verify takes light or dark, never both.
+    expect(run(d, 'verify', 'theme.html', '--build', 'theme.html', '--color-scheme', 'both').code).toBe(2);
+    // verify renders design and build in the scheme asked for: a dark-themed design matches a
+    // build hard-coded to its dark colour only in dark.
+    const t = (css: string) =>
+      `<!doctype html><html><body style="margin:0;font:16px sans-serif"><h1 style="margin:40px">Choose your plan</h1><style>${css}</style></body></html>`;
+    writeFileSync(join(d, 'design.html'), t('h1{color:#10292c}@media (prefers-color-scheme: dark){h1{color:#2a6f2a}}'));
+    writeFileSync(join(d, 'build.html'), t('h1{color:#2a6f2a}'));
+    const args = ['verify', 'design.html', '--build', 'build.html', '--viewports', '800x600'];
+    expect(run(d, ...args).code).toBe(1);
+    expect(run(d, ...args, '--color-scheme', 'dark').code).toBe(0);
+  }, 120_000);
+
   it('selftest: every guard rule and the comparison catch their planted faults', () => {
     const r = run(tmp(), 'selftest');
     expect(r.code).toBe(0);
