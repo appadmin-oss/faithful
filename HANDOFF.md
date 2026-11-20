@@ -35,6 +35,13 @@ what to do next, in order.
 Every detector was broken on purpose and its test watched to fail. Keep doing that
 (`AGENTS.md`). Exit codes: 0 pass, 1 fail, 2 bad call.
 
+## Resume here (20 Nov 2026, end of session)
+
+Done and pushed: audit fixes, 14 skills, contrast + `--color-scheme`, `--stress`, axe-core,
+canvas/design-system readers, `verify --screen`, TypeScript 7. Tests: 256, all green.
+Next: HANDOFF item 8 (audit tuning) was started and stopped unfinished; its partial work is in
+`git stash` on this machine only — restart it from the item 8 list below. Then items 1, 2, 5.
+
 ## Audit of 20 Nov 2026, fixed
 
 An audit reproduced about 40 faults; every one below is fixed with a test watched to fail.
