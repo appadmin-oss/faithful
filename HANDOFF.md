@@ -1,6 +1,6 @@
 # Faithful — handoff
 
-State on 17 Nov 2026, for whoever continues this (a person or an agent). `README.md` says what
+State on 20 Nov 2026, for whoever continues this (a person or an agent). `README.md` says what
 Faithful is; `AGENTS.md` says how to work on it; this file is what is done, what is not, and
 what to do next, in order.
 
@@ -8,7 +8,7 @@ what to do next, in order.
 
 - **Code:** `main` on GitHub at [appadmin-oss/faithful](https://github.com/appadmin-oss/faithful).
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
-- **Health:** `pnpm install && pnpm check` → lint clean, build, 130 tests, selftest — all green.
+- **Health:** `pnpm install && pnpm check` → lint clean, build, 195 tests, selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **Not published to npm.** The scope `@faithful` must be created on npmjs.com first. The
   unscoped name `faithful` belongs to an unrelated package: never tell anyone to run
@@ -28,12 +28,29 @@ what to do next, in order.
 | `faithful.deviations.json` | Intended changes with reason, owner, expiry; covered findings become notes; expired entries cover nothing; stale entries are reported; a bad entry is exit 2 | `advance.test.ts`, `packages/cli/test/bin.test.ts` |
 | `audit <url\|file>` | A page with no design, at 375 and 1440: clipped/overlapping/covered text, sideways scroll, broken images, script errors, failed requests, unrendered values, lorem/dummy data, invisible content, readability, small targets, too many sizes, wording, AI-slop tells scored by co-occurrence | `fixtures/audit/slop.html` (every planted fault, once) and `clean.html` (nothing); `packages/core/test/audit.test.ts` |
 | `parity --before <a> --after <b>` | Refactor/redesign: every link, button, form field name, landmark, route still there; looks ignored; renames flagged; self-check plants a loss before trusting itself | `fixtures/parity/` (a re-skin passes, four planted losses caught); `packages/core/test/parity.test.ts` |
-| Six Agent Skills | `faithful`, `faithful-implement-design`, `faithful-ui-quality`, `faithful-safe-redesign`, `faithful-ui-copy`, `faithful-design-handoff` in `packages/cli/skills/`; installed by `init` (`--skills a,b` for a subset) | `packages/cli/test/skills.test.ts` (spec limits, a proving command, no `npx faithful`) |
+| Twelve Agent Skills | `faithful`, `faithful-implement-design`, `faithful-ui-quality`, `faithful-safe-redesign`, `faithful-ui-copy`, `faithful-design-handoff`, `faithful-ui-states`, `faithful-responsive`, `faithful-accessible-forms`, `faithful-data-display`, `faithful-design-tokens`, `faithful-no-visual-change` in `packages/cli/skills/` (why: `docs/research/skills-2026-11.md`); installed by `init` (`--skills a,b` for a subset) | `packages/cli/test/skills.test.ts` (spec limits, a proving command, no `npx faithful`) |
 | `outline`, `spec`, `explain`, `guard`, `selftest`, `formats`, `doctor`, `init` | See `README.md` | `packages/cli/test/bin.test.ts` |
 | MCP server (`@faithful/mcp`) | Six tools: outline, verify, audit, parity, explain, guard | `packages/mcp/test/stdio.test.ts` (real stdio) |
 
 Every detector was broken on purpose and its test watched to fail. Keep doing that
 (`AGENTS.md`). Exit codes: 0 pass, 1 fail, 2 bad call.
+
+## Audit of 20 Nov 2026, fixed
+
+An audit reproduced about 40 faults; every one below is fixed with a test watched to fail.
+Verdicts that could lie: a missing element passing as a "split" of stray text; deviations whose
+`expires` was not a date (covered forever) or whose 1-character `match` silenced everything;
+declared findings still dragging the score; conformity copy matched as a page-wide substring;
+`//` in `url(//cdn…)` hiding the rest of a CSS file from `guard`; parity false alarms on a file
+vs its served copy, trailing slashes and query order; overlap measured on element boxes;
+nav links excused as prose; © ™ counted as emoji. Runs that died: a `%` in any asset URL
+crashed the process; a page looping after load hung forever; one stale browser path blocked
+working ones. Hardening: page probes run in an isolated world, so a page cannot fake a clean
+result; config and deviations are validated, bad JSON names its file; `file://` targets work.
+
+Decision taken: target size follows WCAG 2.5.8 exactly — under 24px in either dimension is a
+finding unless the 24px-circle spacing exception holds (`audit.ts`, one line to make stricter).
+Open: findings with no element are declarable only with `kind` plus an 8+ character phrase.
 
 ## How effective it is, and how it compares
 

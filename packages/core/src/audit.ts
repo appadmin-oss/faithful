@@ -165,7 +165,8 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
         small[0]?.sel,
       );
   }
-  for (const t of f.targets.filter((t) => t.w < minTarget && t.h < minTarget).slice(0, 6)) {
+  // WCAG 2.5.8: 24×24, unless the target is spaced well clear of every other one.
+  for (const t of f.targets.filter((t) => (t.w < minTarget || t.h < minTarget) && !t.spaced).slice(0, 6)) {
     add(
       'target',
       'warn',

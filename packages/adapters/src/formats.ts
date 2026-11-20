@@ -11,8 +11,26 @@
 import type { Adapter } from '@faithful/core';
 import { parseColor, toHex } from '@faithful/core';
 import type { DesignElement, Inventory, Screen, Token } from '@faithful/spec';
-import { emptyInventory, validateSpec } from '@faithful/spec';
+import { emptyInventory, SpecError, validateSpec } from '@faithful/spec';
 import { mergeInventory, provenance, screenId, spec } from './util.js';
+
+/** A malformed design file: the error names the file, and the run stops with exit 2. */
+async function readJson(ctx: { readFile(p: string): Promise<string> }, path: string, what: string): Promise<unknown> {
+  const text = await ctx.readFile(path);
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new SpecError(`${path}: not valid JSON, so not a ${what} (${(e as Error).message})`);
+  }
+}
+async function about<T>(path: string, what: string, read: () => T | Promise<T>): Promise<T> {
+  try {
+    return await read();
+  } catch (e) {
+    const msg = (e as Error).message ?? String(e);
+    throw new SpecError(msg.startsWith(path) ? msg : `${path}: not a valid ${what}: ${msg}`);
+  }
+}
 
 // ── A Faithful spec ──────────────────────────────────────────────────────────
 
@@ -25,7 +43,8 @@ export const specAdapter: Adapter = {
     return /"faithful"\s*:\s*1\b/.test(input.head.slice(0, 2000)) ? { format: 'faithful/spec@1', confidence: 1 } : null;
   },
   async read(input, ctx) {
-    return validateSpec(JSON.parse(await ctx.readFile(input.path)));
+    const doc = await readJson(ctx, input.path, 'Faithful spec');
+    return about(input.path, 'Faithful spec', () => validateSpec(doc));
   },
 };
 
@@ -100,7 +119,10 @@ export function tokensFromDtcg(doc: unknown): Token[] {
   for (const [name, { value, type }] of flat) {
     let v = resolve(value);
     // DTCG 2025.10 colours may be objects: { colorSpace, components, hex }.
-    if (typeof v === 'object' && v !== null && 'hex' in v) v = (v as { hex: string }).hex;
+    if (typeof v === 'object' && v !== null && 'hex' in v) {
+      v = (v as { hex: unknown }).hex;
+      if (typeof v !== 'string') throw new SpecError(`token "${name}": a colour's "hex" must be a string`);
+    }
     if (typeof v === 'object' && v !== null && 'value' in v && 'unit' in v)
       v = `${(v as { value: number }).value}${(v as { unit: string }).unit}`;
     if (typeof v !== 'string' && typeof v !== 'number') continue;
@@ -143,8 +165,13 @@ export const tokensAdapter: Adapter = {
     return null;
   },
   async read(input, ctx) {
-    const text = await ctx.readFile(input.path);
-    const tokens = /\.json$/i.test(input.path) ? tokensFromDtcg(JSON.parse(text)) : tokensFromCss(text);
+    const json = /\.json$/i.test(input.path);
+    const text = json ? '' : await ctx.readFile(input.path);
+    const tokens = json
+      ? await about(input.path, 'DTCG token file', async () =>
+          tokensFromDtcg(await readJson(ctx, input.path, 'DTCG token file')),
+        )
+      : tokensFromCss(text);
     const fmt = /\.json$/i.test(input.path)
       ? 'dtcg@2025.10'
       : /@theme\b/.test(text)
@@ -254,11 +281,40 @@ const rgba = (f: NonNullable<FNode['fills']>[number] | undefined): string | unde
 };
 
 /** Figma frames as screens: every visible text, painted shape and image fill, frame-relative. */
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isBox = (b: unknown): boolean =>
+  isObj(b) && ['x', 'y', 'width', 'height'].every((k) => typeof b[k] === 'number' && Number.isFinite(b[k]));
+
+/** Check the parts of a Figma node this reader relies on, so a malformed file is named, not a TypeError. */
+function checkNode(n: unknown, at: string): asserts n is FNode {
+  if (!isObj(n) || typeof n.type !== 'string') throw new SpecError(`${at} is not a node (no "type")`);
+  if (n.children !== undefined && !Array.isArray(n.children)) throw new SpecError(`${at}.children is not a list`);
+  if (n.characters !== undefined && typeof n.characters !== 'string')
+    throw new SpecError(`${at}.characters is not text`);
+  if (n.absoluteBoundingBox !== undefined && n.absoluteBoundingBox !== null && !isBox(n.absoluteBoundingBox))
+    throw new SpecError(`${at}.absoluteBoundingBox needs numeric x, y, width, height`);
+  for (const k of ['fills', 'strokes'] as const)
+    if (n[k] !== undefined && !Array.isArray(n[k])) throw new SpecError(`${at}.${k} is not a list`);
+  if (n.style !== undefined && !isObj(n.style)) throw new SpecError(`${at}.style is not an object`);
+  (n.children as unknown[] | undefined)?.forEach((c, i) => {
+    checkNode(c, `${at}.children[${i}]`);
+  });
+}
+
 export function figmaScreens(doc: unknown): Screen[] {
   const roots: FNode[] = [];
-  const d = doc as { document?: FNode; nodes?: Record<string, { document: FNode }> };
-  if (d.nodes) for (const n of Object.values(d.nodes)) roots.push(n.document);
-  else if (d.document) roots.push(d.document);
+  if (!isObj(doc)) throw new SpecError('a Figma export is a JSON object with "document" or "nodes"');
+  if (doc.nodes !== undefined) {
+    if (!isObj(doc.nodes)) throw new SpecError('"nodes" is not an object');
+    for (const [k, n] of Object.entries(doc.nodes)) {
+      if (!isObj(n) || !isObj(n.document)) throw new SpecError(`nodes["${k}"] has no "document"`);
+      checkNode(n.document, `nodes["${k}"].document`);
+      roots.push(n.document);
+    }
+  } else if (doc.document !== undefined) {
+    checkNode(doc.document, 'document');
+    roots.push(doc.document);
+  } else throw new SpecError('a Figma export has "document" or "nodes"');
   const frames: FNode[] = [];
   const findFrames = (n: FNode, depth: number) => {
     if (n.visible === false) return;
@@ -340,7 +396,8 @@ export const figmaAdapter: Adapter = {
       : null;
   },
   async read(input, ctx) {
-    const screens = figmaScreens(JSON.parse(await ctx.readFile(input.path)));
+    const doc = await readJson(ctx, input.path, 'Figma export');
+    const screens = await about(input.path, 'Figma export', () => figmaScreens(doc));
     const warnings = screens.length ? [] : ['no top-level frames found'];
     return spec(provenance('figma-json', 'figma/rest@1', 'structured', 0.85, input.path, warnings), screens);
   },
@@ -360,7 +417,8 @@ export const imageAdapter: Adapter = {
   async read(input, ctx) {
     const sidecar = input.path.replace(/\.(png|jpe?g|webp)$/i, '.faithful.json');
     if (await ctx.exists(sidecar)) {
-      const s = validateSpec(JSON.parse(await ctx.readFile(sidecar)));
+      const sd = await readJson(ctx, sidecar, 'Faithful spec');
+      const s = await about(sidecar, 'Faithful spec', () => validateSpec(sd));
       for (const sc of s.screens) sc.referenceImage ??= input.path;
       return s;
     }

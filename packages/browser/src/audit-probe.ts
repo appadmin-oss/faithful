@@ -61,9 +61,38 @@ export function auditProbe(): AuditFacts {
     const r = e.getBoundingClientRect();
     return r.width <= 2 || r.height <= 2;
   };
-  const rgb = (c: string) => {
-    const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?/.exec(c);
-    return m ? { r: Number(m[1]), g: Number(m[2]), b: Number(m[3]), a: m[4] === undefined ? 1 : Number(m[4]) } : null;
+  // Any CSS colour a computed style can hold — rgb() with commas or spaces, but also oklch(),
+  // lab(), color(display-p3 …) — as 8-bit sRGB. The modern spaces are drawn into a 1×1 canvas
+  // and read back, so the browser itself does the conversion.
+  const COLOR = /(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)|#[0-9a-f]{3,8}\b/i;
+  const colorCache = new Map<string, { r: number; g: number; b: number; a: number } | null>();
+  let pen: CanvasRenderingContext2D | null | undefined;
+  const rgb = (c: string): { r: number; g: number; b: number; a: number } | null => {
+    const tok = COLOR.exec(c)?.[0];
+    if (!tok) return null;
+    const fast = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*([\d.]+)(%?))?\s*\)$/i.exec(tok);
+    if (fast) {
+      const a = fast[4] === undefined ? 1 : Number(fast[4]) / (fast[5] ? 100 : 1);
+      return { r: Number(fast[1]), g: Number(fast[2]), b: Number(fast[3]), a };
+    }
+    const hit = colorCache.get(tok);
+    if (hit !== undefined) return hit;
+    if (pen === undefined) {
+      const cv = document.createElement('canvas');
+      cv.width = 1;
+      cv.height = 1;
+      pen = cv.getContext('2d', { willReadFrequently: true });
+    }
+    let out: { r: number; g: number; b: number; a: number } | null = null;
+    if (pen) {
+      pen.clearRect(0, 0, 1, 1);
+      pen.fillStyle = tok;
+      pen.fillRect(0, 0, 1, 1);
+      const d = pen.getImageData(0, 0, 1, 1).data;
+      out = { r: d[0] ?? 0, g: d[1] ?? 0, b: d[2] ?? 0, a: (d[3] ?? 0) / 255 };
+    }
+    colorCache.set(tok, out);
+    return out;
   };
   const hsl = (c: { r: number; g: number; b: number }) => {
     const r = c.r / 255,
@@ -147,20 +176,37 @@ export function auditProbe(): AuditFacts {
 
   // ── Text drawn on text, and text covered in the first screen ──────────────────────
   const solid = leaves.filter((e) => opacityOf(e) > 0.5).slice(0, 700);
-  const rects = solid.map((e) => e.getBoundingClientRect());
+  // The GLYPHS' boxes, line by line, not the element's: a corner badge over the empty end of a
+  // full-width heading covers no words.
+  const glyphs = (e: Element): DOMRect[] => {
+    const out: DOMRect[] = [];
+    for (const n of Array.from(e.childNodes)) {
+      if (n.nodeType !== 3 || !(n.textContent ?? '').trim()) continue;
+      const range = document.createRange();
+      range.selectNodeContents(n);
+      for (const r of Array.from(range.getClientRects())) if (r.width > 0 && r.height > 0) out.push(r);
+      if (out.length > 40) break;
+    }
+    return out;
+  };
+  const rects = solid.map(glyphs);
   const overlaps: AuditFacts['overlaps'] = [];
+  const collide = (P: DOMRect[], Q: DOMRect[]) =>
+    P.some((A) =>
+      Q.some((B) => {
+        const w = Math.min(A.right, B.right) - Math.max(A.left, B.left);
+        const h = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
+        if (w <= 0 || h <= 0) return false;
+        const small = Math.min(A.width * A.height, B.width * B.height);
+        return w * h >= 0.25 * small && w * h >= 40;
+      }),
+    );
   for (let i = 0; i < solid.length && overlaps.length < 12; i++) {
     for (let j = i + 1; j < solid.length; j++) {
       const a = solid[i] as Element,
         b = solid[j] as Element;
       if (a.contains(b) || b.contains(a)) continue;
-      const A = rects[i] as DOMRect,
-        B = rects[j] as DOMRect;
-      const w = Math.min(A.right, B.right) - Math.max(A.left, B.left);
-      const h = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
-      if (w <= 0 || h <= 0) continue;
-      const small = Math.min(A.width * A.height, B.width * B.height);
-      if (w * h < 0.25 * small || w * h < 40) continue;
+      if (!collide(rects[i] as DOMRect[], rects[j] as DOMRect[])) continue;
       overlaps.push({ a: path(a), b: path(b), text: short(ownText(a), 30), other: short(ownText(b), 30) });
       break;
     }
@@ -221,29 +267,54 @@ export function auditProbe(): AuditFacts {
     });
   }
   const targets: AuditFacts['targets'] = [];
+  const TARGET =
+    'a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=tab],[role=checkbox]';
+  const proseAround = (p: Element) => {
+    let n = 0;
+    const walk = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      const ctl = t.parentElement?.closest(`${TARGET},label`);
+      if (ctl && ctl !== p && p.contains(ctl)) continue;
+      n += (t.textContent ?? '').replace(/\s+/g, ' ').trim().length;
+    }
+    return n;
+  };
+  const small: { e: Element; r: DOMRect }[] = [];
   for (const e of all) {
-    if (
-      !e.matches(
-        'a[href],button,input:not([type=hidden]),select,textarea,[role=button],[role=link],[role=tab],[role=checkbox]',
-      )
-    )
-      continue;
+    if (!e.matches(TARGET)) continue;
     if (!shown(e)) continue;
-    // A link inside running text is exempt (WCAG 2.5.8 "inline").
-    if (
-      e.tagName === 'A' &&
-      cs(e).display === 'inline' &&
-      (e.parentElement?.textContent ?? '').trim().length > (e.textContent ?? '').trim().length + 20
-    )
+    // A link inside running text is exempt (WCAG 2.5.8 "inline"). Running text is the
+    // parent's OWN words: a row of links has none, however much link text it holds.
+    if (e.tagName === 'A' && cs(e).display === 'inline' && e.parentElement && proseAround(e.parentElement) > 20)
       continue;
     const r = e.getBoundingClientRect();
-    if (r.width < 24 || r.height < 24)
-      targets.push({
-        sel: path(e),
-        text: short(e.textContent || e.getAttribute('aria-label') || '', 30),
-        w: Math.round(r.width),
-        h: Math.round(r.height),
-      });
+    if (r.width < 24 || r.height < 24) small.push({ e, r });
+  }
+  // WCAG 2.5.8's spacing exception: an undersized target passes when a 24px circle on its
+  // centre meets no other target (nor another such circle).
+  const allTargets = all
+    .filter((e) => e.matches(TARGET) && shown(e))
+    .slice(0, 800)
+    .map((e) => ({ e, r: e.getBoundingClientRect() }));
+  for (const { e, r } of small) {
+    const cx = r.left + r.width / 2,
+      cy = r.top + r.height / 2;
+    const crowded = allTargets.some(({ e: o, r: q }) => {
+      if (o === e || o.contains(e) || e.contains(o)) return false;
+      const isSmall = q.width < 24 || q.height < 24;
+      if (isSmall && Math.hypot(q.left + q.width / 2 - cx, q.top + q.height / 2 - cy) < 24) return true;
+      // Distance from the centre to the other target's box.
+      const dx = Math.max(q.left - cx, 0, cx - q.right),
+        dy = Math.max(q.top - cy, 0, cy - q.bottom);
+      return Math.hypot(dx, dy) < 12;
+    });
+    targets.push({
+      sel: path(e),
+      text: short(e.textContent || e.getAttribute('aria-label') || '', 30),
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      ...(crowded ? {} : { spaced: true }),
+    });
     if (targets.length >= 20) break;
   }
   // innerText, not textContent: an accessible name is what is RENDERED (hidden text excluded).
@@ -283,7 +354,7 @@ export function auditProbe(): AuditFacts {
     .map((form) => ({
       sel: path(form),
       action: form.getAttribute('action') ?? '',
-      method: (form.getAttribute('method') ?? 'get').toLowerCase(),
+      method: (form.getAttribute('method') || 'get').toLowerCase(),
       fields: Array.from(form.elements)
         .filter(
           (el) =>
@@ -380,7 +451,7 @@ export function auditProbe(): AuditFacts {
         const c = rgb(part);
         const nums =
           part
-            .replace(/rgba?\([^)]*\)/, '')
+            .replace(COLOR, '')
             .match(/-?[\d.]+px/g)
             ?.map((n) => Number.parseFloat(n)) ?? [];
         const blur = nums[2] ?? 0;
@@ -389,7 +460,9 @@ export function auditProbe(): AuditFacts {
     })
     .slice(0, 8)
     .map(path);
-  const PICT = /^\s*\p{Extended_Pictographic}/u;
+  // An emoji DRAWN as one: emoji presentation by default, or a pictograph asked to be one with
+  // U+FE0F. © ® ™ ↔ ▶ are text symbols, not icons.
+  const PICT = /^\s*(?:\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F)/u;
   const emojiIcons = leaves
     .filter((e) => e.closest('button,a,nav,h1,h2,h3,h4,li,[role=button]') && PICT.test(ownText(e)))
     .slice(0, 12)

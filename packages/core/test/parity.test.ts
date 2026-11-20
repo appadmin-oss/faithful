@@ -148,6 +148,60 @@ describe('parity', () => {
     ).toBe(true);
   });
 
+  it('a file page and its served copy agree: the private folder is the site root, index.html its folder', () => {
+    const file = 'http://faithful.localhost/__faithful__/index.html';
+    for (const [href, want] of [
+      ['about.html', '/about.html'],
+      ['/docs', '/docs'],
+      ['#pricing', '#pricing'],
+      ['index.html', '/'],
+    ] as const) {
+      expect(normHref(href, file)).toBe(want);
+      expect(normHref(href, 'http://localhost:8080/')).toBe(want);
+      expect(normHref(href, 'http://localhost:8080/index.html')).toBe(want);
+    }
+    const links = page().controls.map((c, i) => (c.href ? { ...c, href: ['books.html', 'orders/'][i] } : c));
+    const r = compareParity(
+      page({ url: file, controls: links }),
+      page({ url: 'http://localhost:8080/', controls: links }),
+      's',
+    );
+    expect(r.findings).toEqual([]);
+  });
+
+  it('but a link that really goes somewhere else is still reported between a file and a server', () => {
+    const file = 'http://faithful.localhost/__faithful__/index.html';
+    const moved = page().controls.map((c) => (c.name === 'My orders' ? { ...c, href: '/account/orders' } : c));
+    const r = compareParity(page({ url: file }), page({ url: 'http://localhost:8080/', controls: moved }), 's');
+    expect(r.findings.map((f) => f.detail)).toEqual(['link "My orders" now goes to /account/orders, not /orders']);
+  });
+
+  it('query parameters in another order are the same target; a changed value is not', () => {
+    expect(normHref('/docs/?b=2&a=1', 'http://a.test/')).toBe(normHref('/docs?a=1&b=2', 'http://b.test/'));
+    const q = (href: string) => page({ controls: [{ sel: 'a', role: 'link', name: 'Docs', href, visible: true }] });
+    expect(compareParity(q('/docs/?b=2&a=1'), q('/docs?a=1&b=2'), 's').findings).toEqual([]);
+    expect(compareParity(q('/docs?b=2&a=1'), q('/docs?a=1&b=3'), 's').findings.map((f) => f.kind)).toEqual(['changed']);
+  });
+
+  it('form actions compare like links (trailing slash, file vs server); an empty method is GET', () => {
+    const form = (action: string, method: string) =>
+      page({ forms: [{ ...(page().forms[0] as AuditFacts['forms'][number]), action, method }] });
+    expect(compareParity(form('/newsletter', 'post'), form('/newsletter/', 'POST'), 's').findings).toEqual([]);
+    expect(compareParity(form('', ''), form('', 'get'), 's').findings).toEqual([]);
+    expect(
+      compareParity(
+        { ...form('subscribe', 'post'), url: 'http://faithful.localhost/__faithful__/index.html' },
+        form('/subscribe/', 'post'),
+        's',
+      ).findings,
+    ).toEqual([]);
+    // Real changes of the same shape are still errors.
+    const moved = compareParity(form('/newsletter', 'post'), form('/subscribe', 'post'), 's').findings;
+    expect(moved.map((f) => f.detail)).toEqual(['a form now sends to /subscribe, not /newsletter']);
+    const verb = compareParity(form('/newsletter', ''), form('/newsletter', 'post'), 's').findings;
+    expect(verb.map((f) => f.detail)).toEqual(['a form now sends by POST, not GET']);
+  });
+
   it('checks itself: a page with nothing to compare is inconclusive, not a pass', () => {
     expect(selfCheck(page()).ok).toBe(true);
     expect(selfCheck(page({ controls: [], forms: [] }))).toEqual({

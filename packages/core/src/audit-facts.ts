@@ -18,7 +18,11 @@ export interface AuditFacts {
   /** Visible-sized text whose effective opacity is ~0: waiting for a script to reveal it. */
   invisible: { sel: string; text: string }[];
   paragraphs: { sel: string; cpl: number; lines: number; lineHeight: number; fontSize: number; centred: boolean }[];
-  targets: { sel: string; text: string; w: number; h: number }[];
+  /**
+   * Controls under 24px in either dimension (links inside running text excluded). `spaced`:
+   * WCAG 2.5.8's spacing exception holds (a 24px circle on its centre meets no other target).
+   */
+  targets: { sel: string; text: string; w: number; h: number; spaced?: boolean }[];
   /**
    * Links and buttons with what a screen reader would call them. Hidden ones are included and
    * marked: a control inside a closed menu is still something the user can do.

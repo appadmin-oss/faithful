@@ -4,14 +4,15 @@
  * every source of nondeterminism switched off before the reading: animations and transitions
  * stopped, the caret hidden, reduced motion requested, web fonts awaited.
  */
+import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
-import type { AuditFacts, Rendered, RenderTarget } from '@faithful/core';
+import { type AuditFacts, FILE_ENTRY_DIR, FILE_ORIGIN, type Rendered, type RenderTarget } from '@faithful/core';
 import type { DesignElement, Region, Screen, Viewport } from '@faithful/spec';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { auditProbe } from './audit-probe.js';
 import { extractPage, type RawPage } from './extract.js';
-import { chromeCandidates, findChrome } from './find-chrome.js';
+import { chromeCandidates } from './find-chrome.js';
 
 export interface CaptureOptions {
   ignore?: string[];
@@ -27,8 +28,9 @@ export interface CaptureOptions {
 
 const FREEZE = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}`;
 
-const ORIGIN = 'http://faithful.localhost';
-const ENTRY_DIR = '/__faithful__/';
+// Shared with parity's normHref, which reads this private folder as the site root.
+const ORIGIN = FILE_ORIGIN;
+const ENTRY_DIR = FILE_ENTRY_DIR;
 const ENTRY = `${ENTRY_DIR}index.html`;
 const TYPES: Record<string, string> = {
   '.html': 'text/html',
@@ -55,23 +57,56 @@ export class BrowserError extends Error {
   override readonly name = 'BrowserError';
 }
 
+/** Starts a browser: `undefined` is Playwright's own build, a path is that executable. */
+export type Launcher = (executablePath: string | undefined) => Promise<Browser>;
+const defaultLauncher: Launcher = (exe) => chromium.launch(exe ? { executablePath: exe } : {});
+
+/**
+ * The order browsers are tried in: the user's explicit override (even a path that is not
+ * there: the error then says so), Playwright's own build, then every other candidate that exists.
+ */
+export function launchPlan(): (string | undefined)[] {
+  const explicit = [process.env.FAITHFUL_CHROMIUM, process.env.CHROME_PATH].filter((v): v is string => !!v);
+  const rest = chromeCandidates().filter((p) => !explicit.includes(p) && existsSync(p));
+  return [...new Set(explicit), undefined, ...new Set(rest)];
+}
+
+/**
+ * A promise bounded by the capture's timeout. `page.evaluate` has no timeout of its own: a
+ * page that busy-loops after load would otherwise hang the run (and the MCP server) forever.
+ */
+function within<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new BrowserError(`the page did not answer within ${ms}ms (${what}): is a script stuck in a loop?`)),
+      ms,
+    );
+  });
+  return Promise.race([p, late]).finally(() => clearTimeout(timer));
+}
+/** Swallow a page's own failure, never a timeout. */
+const unlessHung = (e: unknown): undefined => {
+  if (e instanceof BrowserError) throw e;
+  return undefined;
+};
+
 export class Renderer {
   private constructor(private readonly browser: Browser) {}
 
-  static async launch(): Promise<Renderer> {
+  /**
+   * Start a Chromium: an explicit FAITHFUL_CHROMIUM / CHROME_PATH first (the user asked for
+   * it), then Playwright's own build, then every other browser this machine has, until one
+   * starts. A stale override or a broken download never blocks a working browser behind it,
+   * and when none starts the error names every attempt.
+   */
+  static async launch(start: Launcher = defaultLauncher): Promise<Renderer> {
     const errors: string[] = [];
-    // Playwright's own build first, then any Chrome this machine already has.
-    try {
-      return new Renderer(await chromium.launch());
-    } catch (e) {
-      errors.push((e as Error).message.split('\n')[0] ?? String(e));
-    }
-    const exe = findChrome();
-    if (exe) {
+    for (const exe of launchPlan()) {
       try {
-        return new Renderer(await chromium.launch({ executablePath: exe }));
+        return new Renderer(await start(exe));
       } catch (e) {
-        errors.push(`${exe}: ${(e as Error).message.split('\n')[0]}`);
+        errors.push(`${exe ?? "Playwright's Chromium"}: ${(e as Error).message.split('\n')[0] ?? String(e)}`);
       }
     }
     throw new BrowserError(
@@ -103,25 +138,25 @@ export class Renderer {
       const page = await ctx.newPage();
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
-      await page.addStyleTag({ content: FREEZE }).catch(() => undefined);
-      if (target.readyWhen) await page.waitForFunction(target.readyWhen, undefined, { timeout }).catch(() => undefined);
-      await page.evaluate(() => document.fonts?.ready.then(() => undefined)).catch(() => undefined);
-      // Two frames for layout that settles after fonts (a ResizeObserver, a measured header).
-      await page.evaluate(
-        () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
+      await this.settle(page, target, timeout);
+      const raw: RawPage = await within(
+        inWorld<RawPage>(page, extractPage, { ignore: opts.ignore ?? [], max: opts.maxElements ?? 4000 }),
+        timeout,
+        'reading the page',
       );
-      const raw: RawPage = await page.evaluate(extractPage, {
-        ignore: opts.ignore ?? [],
-        max: opts.maxElements ?? 4000,
-      });
-      if (opts.fonts !== false) await this.drawnFonts(page, raw);
+      if (opts.fonts !== false) await within(this.drawnFonts(page, raw), timeout, 'reading drawn fonts');
       if (opts.screenshot)
         await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });
       const screen: Rendered = toScreen(raw, viewport, screenId);
-      if (target.probe) screen.probe = await page.evaluate(target.probe).catch((e: Error) => ({ error: e.message }));
+      // The handoff's own probe reads the page's own variables, so it runs in the page's world.
+      if (target.probe)
+        screen.probe = await within(page.evaluate(target.probe), timeout, 'probing the handoff').catch((e: Error) => {
+          if (e instanceof BrowserError) throw e;
+          return { error: e.message };
+        });
       return screen;
     } finally {
-      await ctx.close();
+      await closeContext(ctx, timeout);
     }
   }
 
@@ -159,13 +194,8 @@ export class Renderer {
       });
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
-      await page.addStyleTag({ content: FREEZE }).catch(() => undefined);
-      if (target.readyWhen) await page.waitForFunction(target.readyWhen, undefined, { timeout }).catch(() => undefined);
-      await page.evaluate(() => document.fonts?.ready.then(() => undefined)).catch(() => undefined);
-      await page.evaluate(
-        () => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))),
-      );
-      const facts: AuditFacts = await page.evaluate(auditProbe);
+      await this.settle(page, target, timeout);
+      const facts: AuditFacts = await within(inWorld<AuditFacts>(page, auditProbe), timeout, 'measuring the page');
       if (opts.screenshot)
         await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });
       // The private origin's own favicon probe is not the page's fault.
@@ -176,8 +206,25 @@ export class Renderer {
       };
       return facts;
     } finally {
-      await ctx.close();
+      await closeContext(ctx, timeout);
     }
+  }
+
+  /** Freeze motion, wait for the page's own readiness, fonts and two frames; all bounded. */
+  private async settle(page: Page, target: RenderTarget, timeout: number): Promise<void> {
+    await within(page.addStyleTag({ content: FREEZE }), timeout, 'freezing animations').catch(unlessHung);
+    if (target.readyWhen) await page.waitForFunction(target.readyWhen, undefined, { timeout }).catch(() => undefined);
+    await within(
+      page.evaluate(() => document.fonts?.ready.then(() => undefined)),
+      timeout,
+      'waiting for fonts',
+    ).catch(unlessHung);
+    // Two frames for layout that settles after fonts (a ResizeObserver, a measured header).
+    await within(
+      page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))),
+      timeout,
+      'waiting for layout',
+    );
   }
 
   private async load(page: Page, target: RenderTarget, timeout: number): Promise<void> {
@@ -191,19 +238,30 @@ export class Renderer {
       const site = target.siteRoot ? resolve(target.siteRoot) : base;
       const html = target.html;
       const inside = (dir: string | undefined, file: string) => !!dir && (file === dir || file.startsWith(dir + sep));
+      // Nothing in this handler may throw: a rejection here is unhandled and takes the whole
+      // process down (the CLI and the MCP server with it).
       await page.route(`${ORIGIN}/**`, async (route) => {
-        const path = decodeURIComponent(new URL(route.request().url()).pathname);
-        if (path === ENTRY) return route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
-        // `./data.js` beside the page resolves under the entry's folder; `/assets/x.png` is
-        // the site root's. Neither may leave its own directory.
-        const rel = path.startsWith(ENTRY_DIR) ? path.slice(ENTRY_DIR.length) : null;
-        const dir = rel !== null ? base : site;
-        const file = dir ? resolve(dir, `.${rel !== null ? `/${rel}` : path}`) : undefined;
-        if (!file || !inside(dir, file)) return route.fulfill({ status: 404, body: '' });
+        const notFound = () => route.fulfill({ status: 404, body: '' }).catch(() => undefined);
         try {
-          return route.fulfill({ status: 200, contentType: mime(file), body: await readFile(file) });
+          const raw = new URL(route.request().url()).pathname;
+          // `100%.png` or a page's `fetch('/%')` is not valid percent-encoding: read it literally.
+          let path: string;
+          try {
+            path = decodeURIComponent(raw);
+          } catch {
+            path = raw;
+          }
+          if (path === ENTRY)
+            return await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: html });
+          // `./data.js` beside the page resolves under the entry's folder; `/assets/x.png` is
+          // the site root's. Neither may leave its own directory.
+          const rel = path.startsWith(ENTRY_DIR) ? path.slice(ENTRY_DIR.length) : null;
+          const dir = rel !== null ? base : site;
+          const file = dir ? resolve(dir, `.${rel !== null ? `/${rel}` : path}`) : undefined;
+          if (!file || !inside(dir, file)) return await notFound();
+          return await route.fulfill({ status: 200, contentType: mime(file), body: await readFile(file) });
         } catch {
-          return route.fulfill({ status: 404, body: '' });
+          return notFound();
         }
       });
       await page.goto(`${ORIGIN}${ENTRY}`, { waitUntil: 'load', timeout });
@@ -254,6 +312,44 @@ export class Renderer {
     } finally {
       await cdp.detach().catch(() => undefined);
     }
+  }
+}
+
+/** Close a capture's context, even one whose page is stuck; never wait on it past the timeout. */
+async function closeContext(ctx: BrowserContext, timeout: number): Promise<void> {
+  await within(ctx.close(), timeout, 'closing the page').catch(() => undefined);
+}
+
+/**
+ * Run a self-contained probe in an ISOLATED world: same DOM, but its own copies of every
+ * global and prototype, so a page that overrides getComputedStyle, getBoundingClientRect or
+ * naturalWidth cannot fake a clean reading. Falls back to the page's world only where the
+ * DevTools protocol is not available.
+ */
+async function inWorld<T>(page: Page, fn: (arg: never) => T, arg?: unknown): Promise<T> {
+  let cdp: import('playwright-core').CDPSession;
+  try {
+    cdp = await page.context().newCDPSession(page);
+  } catch {
+    return page.evaluate(fn as (a: unknown) => T, arg);
+  }
+  try {
+    const { frameTree } = await cdp.send('Page.getFrameTree');
+    const { executionContextId } = await cdp.send('Page.createIsolatedWorld', {
+      frameId: frameTree.frame.id,
+      worldName: 'faithful-probe',
+    });
+    const r = await cdp.send('Runtime.evaluate', {
+      expression: `(${fn.toString()})(${arg === undefined ? '' : JSON.stringify(arg)})`,
+      contextId: executionContextId,
+      returnByValue: true,
+      awaitPromise: true,
+    });
+    if (r.exceptionDetails)
+      throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text ?? 'probe failed');
+    return r.result.value as T;
+  } finally {
+    await cdp.detach().catch(() => undefined);
   }
 }
 

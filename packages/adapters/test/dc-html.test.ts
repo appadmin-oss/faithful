@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Renderer } from '@faithful/browser';
 import { afterAll, describe, expect, it } from 'vitest';
-import { dcHtmlAdapter, HOLE } from '../src/index.js';
+import { dcHtmlAdapter, HOLE, missingScripts } from '../src/index.js';
 
 const handoff = (logic: string) => `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">
 <x-dc>
@@ -64,4 +64,17 @@ describe('dc-html', () => {
     expect(texts?.some((t) => t?.includes(HOLE))).toBe(false);
     expect(s.provenance.warnings.join(' ')).toMatch(/data-bound texts left out/);
   }, 60_000);
+});
+
+describe('missingScripts', () => {
+  const beside = (files: string[]) => async (p: string) => files.some((f) => p.endsWith(`/${f}`));
+  it('a script that is there is not missing, whatever its query, quotes or ./', async () => {
+    const html = `<script src="./data.js?v=2"></script><script src='media.js#x'></script><script src="copy.js"></script>`;
+    expect(await missingScripts(html, '/h', beside(['data.js', 'media.js', 'copy.js']))).toEqual([]);
+  });
+  it('one that is not there is still named, however it is written; absolute and remote ones are not ours', async () => {
+    const html = `<script src="./data.js?v=2"></script><script src='media.js'></script><script defer src="copy.js"></script>
+      <script src="/assets/app.js"></script><script src="https://cdn.test/x.js"></script><script src="./support.js"></script>`;
+    expect(await missingScripts(html, '/h', beside([]))).toEqual(['data.js', 'media.js', 'copy.js']);
+  });
 });

@@ -37,9 +37,11 @@ export async function missingScripts(
   exists: (p: string) => Promise<boolean>,
 ): Promise<string[]> {
   const out: string[] = [];
-  for (const m of html.matchAll(/<script[^>]+src="(\.\/[^"]+)"/gi)) {
-    const src = m[1] as string;
-    if (/support\.js$/.test(src)) continue;
+  // `./data.js`, `data.js` or 'data.js', with or without `?v=2`; not `/x.js`, `//cdn/x.js` or `https:`.
+  for (const m of html.matchAll(/<script\b[^>]*?\ssrc\s*=\s*(["'])(.*?)\1/gi)) {
+    const src = (m[2] as string).trim().replace(/[?#].*$/, '');
+    if (!src || src.startsWith('/') || /^[a-z][\w+.-]*:/i.test(src)) continue;
+    if (/(^|\/)support\.js$/.test(src)) continue;
     if (!(await exists(join(dir, src)))) out.push(src.replace(/^\.\//, ''));
   }
   return [...new Set(out)];

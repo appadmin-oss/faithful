@@ -161,6 +161,53 @@ describe('Figma REST export', () => {
   });
 });
 
+describe('malformed design files', () => {
+  const read = (adapter: typeof figmaAdapter, path: string, text: string) =>
+    adapter.read(head(path, text), ctxOf({ [path]: text }) as never);
+  const frame = (child: unknown) =>
+    JSON.stringify({
+      document: {
+        type: 'DOCUMENT',
+        id: '0',
+        children: [
+          { type: 'FRAME', id: '1', absoluteBoundingBox: { x: 0, y: 0, width: 10, height: 10 }, children: child },
+        ],
+      },
+    });
+
+  it('a Figma export of the wrong shape is named, file and place, not a TypeError', async () => {
+    for (const [text, where] of [
+      ['{"nodes":{"1:2":null}}', /f\.json: not a valid Figma export: nodes\["1:2"\] has no "document"/],
+      [frame({}), /f\.json: .*document\.children\[0\]\.children is not a list/],
+      [frame([{ type: 'TEXT', id: '2', characters: 5 }]), /f\.json: .*children\[0\]\.characters is not text/],
+      ['{"document":', /f\.json: not valid JSON/],
+    ] as const) {
+      const err = await read(figmaAdapter, 'f.json', text).catch((e: Error) => e);
+      expect(err, text).toBeInstanceOf(Error);
+      expect((err as Error).name).toBe('SpecError');
+      expect((err as Error).message).toMatch(where);
+    }
+    // A well-formed one still reads.
+    const ok = await read(
+      figmaAdapter,
+      'f.json',
+      frame([{ type: 'TEXT', id: '2', characters: 'Hi', absoluteBoundingBox: { x: 1, y: 1, width: 5, height: 5 } }]),
+    );
+    expect(ok.screens[0]?.elements.map((e) => e.text)).toEqual(['Hi']);
+  });
+
+  it('a DTCG file of the wrong shape is named too', async () => {
+    for (const [text, where] of [
+      ['{"color":{"$value":"#fff", ', /t\.tokens\.json: not valid JSON/],
+      ['{"a":{"$value":{"hex":5}}}', /t\.tokens\.json: .*token "a": a colour's "hex" must be a string/],
+    ] as const) {
+      const err = await read(tokensAdapter, 't.tokens.json', text).catch((e: Error) => e);
+      expect((err as Error).name, text).toBe('SpecError');
+      expect((err as Error).message).toMatch(where);
+    }
+  });
+});
+
 describe('data holes', () => {
   it('a text that was a hole is not design copy; a control keeps its box and loses its words', () => {
     const { screen, dropped } = scrubHoles({

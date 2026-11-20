@@ -61,6 +61,16 @@ describe('scoreAudit', () => {
     }
   });
 
+  it('a target short in either dimension is a warning (WCAG 2.5.8) unless it is spaced clear of the others', () => {
+    const t = (w: number, h: number, spaced?: boolean) =>
+      clean({ targets: [{ sel: 'a', text: 'Docs', w, h, ...(spaced ? { spaced } : {}) }] });
+    expect(kinds(t(200, 12))).toEqual(['warn:target']);
+    expect(kinds(t(12, 200))).toEqual(['warn:target']);
+    expect(kinds(t(14, 14))).toEqual(['warn:target']);
+    expect(kinds(t(200, 12, true))).toEqual([]);
+    expect(kinds(t(24, 24))).toEqual([]);
+  });
+
   it('a failed request for a broken image is the same fault once, not twice', () => {
     const f = clean({
       brokenImages: [{ sel: 'img', src: 'team.png' }],

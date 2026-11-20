@@ -5,10 +5,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { compareScreens, DEFAULT_CONFIG, formatText, summarise } from '@faithful/core';
 import type { DesignElement, Provenance, Screen } from '@faithful/spec';
 import { describe, expect, it } from 'vitest';
 import {
+  audit,
   FaithfulError,
   guard,
   init,
@@ -142,6 +144,18 @@ describe('verify reads paths from its cwd', () => {
     });
     expect(r.pass).toBe(true);
     expect(JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8')).pass).toBe(true);
+  }, 120_000);
+
+  it('a file:// URL is read as the file it names, for verify and audit', async () => {
+    const d = tmp();
+    const page =
+      '<!doctype html><html lang="en"><body style="margin:0;font:16px sans-serif"><h1 style="margin:40px">Choose your plan</h1></body></html>';
+    writeFileSync(join(d, 'page.html'), page);
+    const url = pathToFileURL(join(d, 'page.html')).href;
+    const r = await verify({ cwd: d, design: url, build: url, viewports: '800x600' });
+    expect(r.pass).toBe(true);
+    const a = await audit({ cwd: d, target: url, viewports: '800x600' });
+    expect(a.findings.filter((f) => f.kind === 'broken')).toEqual([]);
   }, 120_000);
 });
 

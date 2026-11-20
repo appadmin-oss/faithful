@@ -5,6 +5,7 @@
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ADAPTERS } from '@faithful/adapters';
 import { Renderer } from '@faithful/browser';
 import {
@@ -80,6 +81,9 @@ export function parseMax(s: string | undefined, fallback: number): number {
 }
 
 export const isUrl = (s: string): boolean => /^https?:\/\//i.test(s);
+
+/** A `file://` URL is a path on disk: read it as one, not as a name relative to the cwd. */
+export const localPath = (s: string): string => (/^file:\/\//i.test(s) ? fileURLToPath(s) : s);
 
 /** Parse `1440x900,390x844` (or a single width) into viewports. */
 export function parseViewports(s: string | undefined, fallback: Viewport[]): Viewport[] {
@@ -166,6 +170,12 @@ export interface VerifyOptions {
  * Extra sources add conformity checks to a placed run.
  */
 export async function verify(o: VerifyOptions): Promise<RunResult> {
+  o = {
+    ...o,
+    design: localPath(o.design),
+    build: localPath(o.build),
+    ...(o.also ? { also: o.also.map(localPath) } : {}),
+  };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const session = new Session(cfg);
   // Every path is read against the caller's folder, as audit and parity read theirs: an MCP
@@ -392,6 +402,7 @@ export function formatGuard(r: GuardResult, max = 8, updated = false): { pass: b
 
 /** Outline a design file or a folder of them. Shared by the CLI and the MCP server. */
 export async function outlineAny(target: string, cfg: FaithfulConfig, viewports?: string): Promise<string> {
+  target = localPath(target);
   if (existsSync(target) && statSync(target).isDirectory()) return outlineFolder(target);
   const s = new Session(cfg);
   try {
@@ -415,6 +426,7 @@ export interface AuditRunOptions {
 
 /** Render a page at each viewport and judge it with no design: faults, readability, tells. */
 export async function audit(o: AuditRunOptions): Promise<RunResult> {
+  o = { ...o, target: localPath(o.target) };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const session = new Session(cfg);
   try {
@@ -468,6 +480,7 @@ export interface ParityOptions {
  * before and 404s after is caught; two files are one page each.
  */
 export async function parity(o: ParityOptions): Promise<RunResult> {
+  o = { ...o, before: localPath(o.before), after: localPath(o.after) };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const session = new Session(cfg);
   const cwd = o.cwd ?? process.cwd();

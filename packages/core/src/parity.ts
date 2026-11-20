@@ -32,20 +32,45 @@ export const normName = (s: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
-/** A link's target, comparable across two origins: path + query, no trailing slash; "#" is no target. */
+/**
+ * Where the renderer serves a local HTML file from (a private origin, the file's folder at
+ * {@link FILE_ENTRY_DIR}). A link on a file page resolves under that folder; comparing it with
+ * the same page served over http must not see the folder.
+ */
+export const FILE_ORIGIN = 'http://faithful.localhost';
+export const FILE_ENTRY_DIR = '/__faithful__/';
+
+/**
+ * A link's target, comparable across two origins: path + query, no trailing slash, `index.html`
+ * is its folder, query parameters in a fixed order; an anchor on the page itself is just its
+ * `#name`; "#" is no target. A file page's private
+ * folder is read as the site root, so `about.html` on a file and on its served copy agree.
+ */
 export function normHref(href: string | undefined, base: string): string {
   if (!href || href === '#' || /^javascript:/i.test(href)) return '';
   try {
     const u = new URL(href, base || 'http://x.invalid/');
     const b = base ? new URL(base) : undefined;
+    u.searchParams.sort();
+    const path = (x: URL) => {
+      let p = x.pathname;
+      if (x.origin === FILE_ORIGIN && p.startsWith(FILE_ENTRY_DIR)) p = p.slice(FILE_ENTRY_DIR.length - 1);
+      return p.replace(/\/index\.html?$/i, '/').replace(/\/$/, '') || '/';
+    };
     if (b && u.origin !== b.origin) return u.href.replace(/\/$/, '');
-    return (
-      (u.pathname.replace(/\/$/, '') || '/') + u.search + (u.pathname === (b?.pathname ?? '') && u.hash ? u.hash : '')
-    );
+    // An anchor on the page itself is the same action whatever the page's own address is.
+    if (b && u.hash && path(u) === path(b) && u.search === b.search) return u.hash;
+    return path(u) + u.search;
   } catch {
     return href;
   }
 }
+
+/** A form's method as the browser reads it: anything but POST or DIALOG (an empty one too) is GET. */
+const normMethod = (m: string | undefined): string => {
+  const x = (m ?? '').trim().toLowerCase();
+  return x === 'post' || x === 'dialog' ? x : 'get';
+};
 
 const tokens = (s: string) => new Set(normName(s).split(' ').filter(Boolean));
 function similar(a: string, b: string): number {
@@ -91,7 +116,7 @@ export function matchControls(before: Control[], after: Control[], bBase: string
   return out;
 }
 
-function matchForms(before: Form[], after: Form[]): { before: Form; after?: Form }[] {
+function matchForms(before: Form[], after: Form[], bBase: string, aBase: string): { before: Form; after?: Form }[] {
   const left = [...after];
   const names = (f: Form) => new Set(f.fields.map((x) => x.name).filter(Boolean));
   const overlap = (a: Form, b: Form) => {
@@ -105,7 +130,7 @@ function matchForms(before: Form[], after: Form[]): { before: Form; after?: Form
     let best = -1;
     let score = 0;
     left.forEach((a, i) => {
-      const s = overlap(b, a) + (a.action === b.action ? 0.5 : 0);
+      const s = overlap(b, a) + (formTarget(a, aBase) === formTarget(b, bBase) ? 0.5 : 0);
       if (s > score) {
         score = s;
         best = i;
@@ -115,6 +140,9 @@ function matchForms(before: Form[], after: Form[]): { before: Form; after?: Form
     return { before: b, after: left.splice(best, 1)[0] as Form };
   });
 }
+
+/** Where a form sends, comparable like a link: no action (or an empty one) is the page itself. */
+const formTarget = (f: Form, base: string): string => normHref(f.action || base, base);
 
 export function compareParity(before: AuditFacts, after: AuditFacts, screen: string): ScreenResult {
   const vp = `${after.viewport.width}x${after.viewport.height}`;
@@ -163,7 +191,7 @@ export function compareParity(before: AuditFacts, after: AuditFacts, screen: str
   if (added > 0) add('changed', 'info', `${added} new control${added === 1 ? '' : 's'}`);
 
   // Forms: the server reads field NAMES, so a renamed field is a broken form.
-  for (const { before: fb, after: fa } of matchForms(before.forms, after.forms)) {
+  for (const { before: fb, after: fa } of matchForms(before.forms, after.forms, before.url, after.url)) {
     const label = fb.fields
       .map((x) => x.name)
       .filter(Boolean)
@@ -173,15 +201,20 @@ export function compareParity(before: AuditFacts, after: AuditFacts, screen: str
       add('lost', 'error', `the form sending ${label || 'no named fields'} to ${fb.action || '(this page)'} is gone`);
       continue;
     }
-    if (fa.action !== fb.action)
+    if (formTarget(fa, after.url) !== formTarget(fb, before.url))
       add(
         'changed',
         'error',
         `a form now sends to ${fa.action || '(this page)'}, not ${fb.action || '(this page)'}`,
         fa.sel,
       );
-    if (fa.method !== fb.method)
-      add('changed', 'error', `a form now sends by ${fa.method.toUpperCase()}, not ${fb.method.toUpperCase()}`, fa.sel);
+    if (normMethod(fa.method) !== normMethod(fb.method))
+      add(
+        'changed',
+        'error',
+        `a form now sends by ${normMethod(fa.method).toUpperCase()}, not ${normMethod(fb.method).toUpperCase()}`,
+        fa.sel,
+      );
     for (const x of fb.fields) {
       if (!x.name) continue;
       const y = fa.fields.find((f) => f.name === x.name);
