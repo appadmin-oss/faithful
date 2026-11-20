@@ -37,9 +37,10 @@ import { init } from './init.js';
 
 const HELP = `faithful — prove a build matches its design
 
-  faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
-  faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design: layout faults, contrast, readability, AI-slop tells
+  faithful verify <design> --build <url|file> [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+  faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design: layout faults, contrast, WCAG (axe-core), readability, AI-slop tells
       [--stress expand,rtl,spacing]        also with text 1.3–2× longer, right-to-left, WCAG text spacing
+      [--no-axe]                           skip axe-core's WCAG 2.2 A/AA rules (or config audit.axe: false)
   faithful parity --before <a> --after <b>  after a refactor or redesign: can users still do everything they could?
   faithful outline <design|folder>         what a design contains, in a few lines
   faithful spec <design> [--out file]      the design as a Faithful spec (for design agents to ship)
@@ -50,7 +51,8 @@ const HELP = `faithful — prove a build matches its design
   faithful doctor                          check the browser and environment
   faithful init [--skills a,b]              write faithful.config.json, the agent skills and an AGENTS.md block
 
-Designs: Claude Design .dc.html, HTML (file or URL), Figma REST JSON, DTCG tokens, CSS custom
+Designs: Claude Design .dc.html and canvas.json (one screen per board: --screen <id>) and
+design-system tokens.json, HTML (file or URL), Figma REST JSON, DTCG tokens, CSS custom
 properties, Tailwind @theme, DESIGN.md, copy decks (.txt), images (+ .faithful.json sidecar).
 Docs: https://github.com/appadmin-oss/faithful`;
 
@@ -68,6 +70,7 @@ async function main(argv: string[]): Promise<number> {
       viewports: { type: 'string', short: 'v' },
       'color-scheme': { type: 'string' },
       stress: { type: 'string' },
+      screen: { type: 'string' },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
       max: { type: 'string', default: '' },
@@ -75,6 +78,7 @@ async function main(argv: string[]): Promise<number> {
       config: { type: 'string', short: 'c' },
       all: { type: 'boolean', default: false },
       'update-baseline': { type: 'boolean', default: false },
+      'no-axe': { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -93,6 +97,7 @@ async function main(argv: string[]): Promise<number> {
       if (v.viewports) opts.viewports = v.viewports;
       if (v.also?.length) opts.also = v.also;
       if (v['color-scheme'] !== undefined) opts.colorScheme = v['color-scheme'];
+      if (v.screen !== undefined) opts.screen = v.screen;
       const run = await verify(opts);
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
@@ -108,6 +113,7 @@ async function main(argv: string[]): Promise<number> {
         ...(v.viewports ? { viewports: v.viewports } : {}),
         ...(v['color-scheme'] !== undefined ? { colorScheme: v['color-scheme'] } : {}),
         ...(v.stress !== undefined ? { stress: v.stress } : {}),
+        ...(v['no-axe'] ? { axe: false } : {}),
       });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),

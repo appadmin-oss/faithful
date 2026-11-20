@@ -157,6 +157,7 @@ export function explain(r: RunResult, which: string | 'all'): string {
     f.id ? `design element: ${f.id}` : '',
     f.buildId ? `build element: ${f.buildId}` : '',
     f.screen ? `screen: ${f.screen} at ${f.viewport}` : '',
+    f.help ? `more: ${f.help}` : '',
   ]
     .filter(Boolean)
     .join('\n');

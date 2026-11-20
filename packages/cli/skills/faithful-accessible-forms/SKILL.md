@@ -50,10 +50,12 @@ npx @faithful/cli audit <form-url>
 npx @faithful/cli parity --before <old-url> --after <new-url>
 ```
 
-`audit` flags small targets, clipped labels and error text, unreadable sizes and wording;
-`parity` proves every field name and action survived a rebuild. Then Tab through the whole
-form yourself, submit it empty, and submit it with one bad field: every step must be visible
-and announced.
+`audit` flags small targets, clipped labels and error text, unreadable sizes and wording,
+and runs axe-core's WCAG 2.2 A/AA rules (`a11y` findings: missing labels, names, `autocomplete`
+values, ARIA misuse). Its "needs review" note is yours to check by hand, not a pass. `parity`
+proves every field name and action survived a rebuild. No tool walks the keyboard for you:
+Tab through the whole form yourself, submit it empty, and submit it with one bad field: every
+step must be visible and announced.
 
 ## Report
 

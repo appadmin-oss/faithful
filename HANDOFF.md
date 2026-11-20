@@ -8,7 +8,7 @@ what to do next, in order.
 
 - **Code:** `main` on GitHub at [appadmin-oss/faithful](https://github.com/appadmin-oss/faithful).
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
-- **Health:** `pnpm install && pnpm check` → lint clean, build, 227 tests, selftest — all green.
+- **Health:** `pnpm install && pnpm check` → lint clean, build, 256 tests, selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **Not published to npm.** The scope `@faithful` must be created on npmjs.com first. The
   unscoped name `faithful` belongs to an unrelated package: never tell anyone to run
@@ -26,7 +26,7 @@ what to do next, in order.
 | `verify <design> --build <url\|file>` | Build vs design: missing/extra elements, copy, size, position relative to neighbours (a re-centred stack blames the element that changed), type, colour (CIEDE2000), the font actually drawn, targets; faults the design has too are notes | `packages/core/test/compare.test.ts`; `fixtures/pricing/` (faulty build fails, identical passes); 24 boards of a real Claude Design handoff rendered without `support.js` |
 | Advance, don't copy | A departure that FIXES a WCAG fault (contrast crossing 4.5:1 / 3:1, a control grown past the target) is `improved`, a note | `packages/core/test/advance.test.ts` |
 | `faithful.deviations.json` | Intended changes with reason, owner, expiry; covered findings become notes; expired entries cover nothing; stale entries are reported; a bad entry is exit 2 | `advance.test.ts`, `packages/cli/test/bin.test.ts` |
-| `audit <url\|file>` | A page with no design, at 375 and 1440: clipped/overlapping/covered text, sideways scroll, broken images, script errors, failed requests, unrendered values, lorem/dummy data, invisible content, readability, small targets, too many sizes, wording, AI-slop tells scored by co-occurrence; `--color-scheme light\|dark\|both`; `--stress expand,rtl,spacing` (pseudo-localised text, `dir=rtl`, WCAG 1.4.12 spacing; only the layout faults a pass adds) | `fixtures/audit/slop.html` (every planted fault, once) and `clean.html` (nothing); `packages/core/test/audit.test.ts` |
+| `audit <url\|file>` | A page with no design, at 375 and 1440: axe-core's WCAG 2.2 A/AA rules (`a11y`), clipped/overlapping/covered text, sideways scroll, broken images, script errors, failed requests, unrendered values, lorem/dummy data, invisible content, readability, small targets, too many sizes, wording, AI-slop tells scored by co-occurrence; `--color-scheme light\|dark\|both`; `--stress expand,rtl,spacing` (pseudo-localised text, `dir=rtl`, WCAG 1.4.12 spacing; only the layout faults a pass adds) | `fixtures/audit/slop.html` (every planted fault, once) and `clean.html` (nothing); `packages/core/test/audit.test.ts` |
 | `parity --before <a> --after <b>` | Refactor/redesign: every link, button, form field name, landmark, route still there; looks ignored; renames flagged; self-check plants a loss before trusting itself | `fixtures/parity/` (a re-skin passes, four planted losses caught); `packages/core/test/parity.test.ts` |
 | Fourteen Agent Skills | `faithful`, `faithful-implement-design`, `faithful-ui-quality`, `faithful-safe-redesign`, `faithful-ui-copy`, `faithful-design-handoff`, `faithful-ui-states`, `faithful-responsive`, `faithful-accessible-forms`, `faithful-data-display`, `faithful-design-tokens`, `faithful-no-visual-change`, `faithful-dark-mode`, `faithful-i18n` in `packages/cli/skills/` (why: `docs/research/skills-2026-11.md`); installed by `init` (`--skills a,b` for a subset) | `packages/cli/test/skills.test.ts` (spec limits, a proving command, no `npx faithful`) |
 | `outline`, `spec`, `explain`, `guard`, `selftest`, `formats`, `doctor`, `init` | See `README.md` | `packages/cli/test/bin.test.ts` |
@@ -62,11 +62,11 @@ planted losses, 0 on a full re-skin. Each check was also broken on purpose to se
 
 **Not measured:** recall and false-alarm rate on real sites. Estimates — parity high; verify
 medium-high; audit's mechanical faults medium-high; the slop score unknown (peer tools report
-5–10% false alarms, and audit has no contrast check yet).
+5–10% false alarms).
 
 **Against popular tools** (judgement, out of 10; Fit = covers Faithful's job, Proof = maturity
 and measured accuracy, Agent = output usable by a coding agent): Faithful Fit 8, Proof 2–3,
-Agent 9. Every category has a stronger specialist — axe-core and Lighthouse (accessibility,
+Agent 9. Every category has a stronger specialist — axe-core (now run inside `audit`) and Lighthouse (accessibility,
 Proof 10), Meticulous (refactor replay), Applitools/Percy/Chromatic (visual, paid),
 Impeccable and ai-design-checker (slop) — and none combines design→build checking, a no-design
 audit and redesign parity with agent-first output. The edge is the combination; the gap is
@@ -74,16 +74,27 @@ PROOF, not features.
 
 ## Design readers
 
-Claude Design `.dc.html` (with or without `support.js`), HTML/URLs, Figma REST JSON, Faithful
-specs, DTCG / CSS custom properties / Tailwind `@theme` tokens, DESIGN.md, copy decks, images.
+Claude Design `.dc.html` (with or without `support.js`), Claude Design canvases
+(`project/canvas.json`, `"v": 3`) and design systems (`design-system.json` + `tokens.json`),
+HTML/URLs, Figma REST JSON, Faithful specs, DTCG / CSS custom properties / Tailwind `@theme`
+tokens, DESIGN.md, copy decks, images.
 
-**Not read yet: the current Claude Design format.** Claude Design moved into Claude itself (the
-standalone site closes 14 Dec 2026). A design artifact is `project/canvas.json` (`"v": 3`, a
-`boards` map of `<file>.dc.html → {x, y, w, h, title, expand: "fill", is_interactive}`) over
-ordinary `.dc.html` boards; a design system is `project/design-system.json` + `tokens.json`
-whose tokens are `{name, value, usage}` lists with per-theme values — the DTCG reader cannot
-read that shape. Confirmed against a public MIT-licensed sample (Solar-Analytics-Dashboard,
-`docs/design/v3/boards/canvas.json`).
+**Done 20 Nov 2026: the current Claude Design format.** Claude Design moved into Claude itself
+(the standalone site closes 14 Dec 2026). A design artifact is `project/canvas.json` (`"v": 3`,
+a `boards` map of `<file>.dc.html → {x, y, w, h, title, expand: "fill", is_interactive}`) over
+ordinary `.dc.html` boards; `canvas.ts` reads each board through the dc-html reader at its own
+`w` (`expand: "fill"` → 900 high, 844 under 600px; else `h`), id from the file, name from
+`title`; boards are looked for beside the canvas, then beside `project/`. A missing board is a
+warning; another `v` or a malformed board is a SpecError naming file and place. A design system
+is `design-system.json` + `tokens.json`, `{name, value, usage}` lists with per-theme values;
+`design-system.ts` reads it tolerantly (shape documented at the top of the file) into an
+inventory with every theme's colours. Shape confirmed against a public MIT-licensed sample
+(Solar-Analytics-Dashboard, `docs/design/v3/boards/canvas.json`); the tokens shape is inferred,
+not confirmed against a real `tokens.json` — check one when available. Fixtures: `fixtures/canvas/`
+(synthetic). Left: `x`/`y` and `is_interactive` are not read; every board is rendered even
+with `--screen` (slow on a large canvas). Note: `verify` now stops (exit 2, listing ids) on ANY design
+whose placed screens are different boards — a Figma export of several frames too — until
+`--screen` picks one; one design at several viewports (`x@1440`, `x@390`) is unaffected.
 
 ## Next, in order
 
@@ -95,18 +106,27 @@ then breadth.
 2. **Measure the slop score** against Adrian Krebs' `ai-design-checker` labelled set (MIT, 165
    sites, `npm run eval`): precision and recall, printed in the README. Re-measure after every
    rule change. UICrit (3,059 critiques; licence unverified) next.
-3. **Run axe-core inside `audit`** (`@axe-core/playwright`, MPL-2.0; enable the `wcag22aa` tag
-   or `target-size` stays off). Treat its "needs review" as review items, not passes. This
-   alone closes most of the accessibility gap with the leaders.
+3. ~~Run axe-core inside `audit`~~ — done 20 Nov 2026. Plain `axe-core` (^4.14.1, MPL-2.0,
+   unmodified, a runtime dependency of `@faithful/browser`), evaluated in the probe's isolated
+   world (`packages/browser/src/axe.ts`; a page cannot plant a fake `axe`), tags
+   `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa`, once per viewport and colour scheme, never
+   in stress passes, bounded by the capture timeout. Mapped in `packages/core/src/audit.ts`
+   (`axeFindings`): new kind `a11y`, one finding per rule (critical/serious E, moderate/minor
+   W) with a count and the first element; the help URL is `Finding.help`, shown only by
+   `explain`. `color-contrast` and `target-size` are dropped (`AXE_MEASURED_BY_FAITHFUL`:
+   Faithful's own `contrast` and `target` report them). "Needs review" is one `a11y` note.
+   axe failing or timing out is `W unmeasured`. Off with `--no-axe` or `audit.axe: false`,
+   and the report's `reader:` line says so. No MCP switch, on purpose (an agent must not be
+   able to loosen its own verifier). Left: iframes are not entered (`iframes: false`); one
+   finding per rule means a second element failing the same rule is only counted; axe adds
+   about a second per pass; the rule ids are axe's, not Faithful's vocabulary.
 4. ~~Text contrast in `audit`~~ — done 20 Nov 2026, with `--color-scheme light|dark|both`.
    Left: text over images/gradients and overlapping boxes is "not judged" (no layer order
    yet); placeholders and pseudo-element text are not measured; logos are exempt by class name.
 5. **Measure parity on one real redesign** (the owner's NextGenGen update is the natural case):
    before/after URLs, every finding checked by hand, false alarms fixed with a test each.
-6. **Canvas reader** (`packages/adapters`): one screen per board at its own `w` (height 900, or
-   844 under 600px, for `expand: "fill"`; else `h`), titled from `title`; `verify --screen <id>`,
-   stopping with the list of ids when several boards and no filter. Add the design-system
-   tokens reader (`{name, value, usage}` lists, per-theme values) beside it.
+6. ~~**Canvas reader**~~ — done 20 Nov 2026: `canvas.json` boards as screens, `verify --screen`,
+   the design-system tokens reader (see Design readers).
 7. **Verify match levels**, after Applitools: `--match strict|layout|ignore-colors`, so a
    deliberate restyle can be checked for layout alone.
 8. **Audit tuning from the community research:**
@@ -142,6 +162,10 @@ then breadth.
   `grep -rlP '\x08' packages` finds it.
 - Never put a client's private design copy in tests, fixtures or the README.
 - `KINDS` (`packages/core/src/findings.ts`) is a public vocabulary: add, never rename.
+- Browser and CLI tests import `@faithful/core` from its built `dist`: after editing core,
+  `npx tsc -b packages/core` before running them, or a break you planted is not seen.
+- axe-core is evaluated as a prelude in the probe's isolated world (`inWorld(…, prelude)` in
+  `capture.ts`); its in-page runner (`runAxe`) is serialised like the probes, so no imports.
 - The compact report has a token ceiling test; detail belongs behind `explain`.
 - The skills are the single copy in `packages/cli/skills/`; the npm package ships that folder.
 

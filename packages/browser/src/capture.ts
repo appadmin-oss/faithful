@@ -11,6 +11,7 @@ import { type AuditFacts, FILE_ENTRY_DIR, FILE_ORIGIN, type Rendered, type Rende
 import type { DesignElement, Region, Screen, Viewport } from '@faithful/spec';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { auditProbe } from './audit-probe.js';
+import { AXE_TAGS, axeSource, runAxe } from './axe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
 import { expandText, setRtl, setSpacing } from './stress.js';
@@ -172,7 +173,16 @@ export class Renderer {
   async audit(
     target: RenderTarget,
     viewport: Viewport,
-    opts: { timeoutMs?: number; colorScheme?: 'light' | 'dark'; screenshot?: string; stress?: Stress } = {},
+    opts: {
+      timeoutMs?: number;
+      colorScheme?: 'light' | 'dark';
+      screenshot?: string;
+      stress?: Stress;
+      /** Run axe-core's WCAG 2.2 A/AA rules too (off by default: parity has no use for them). */
+      axe?: boolean;
+      /** Evaluated instead of the bundled axe-core build: lets a test break it. */
+      axeScript?: string;
+    } = {},
   ): Promise<AuditFacts> {
     const ctx: BrowserContext = await this.browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
@@ -220,6 +230,18 @@ export class Renderer {
       const facts: AuditFacts = await within(inWorld<AuditFacts>(page, auditProbe), timeout, 'measuring the page');
       if (opts.screenshot)
         await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });
+      // Last, after the probe and the screenshot, so nothing axe touches can change them. A stress
+      // pass reports layout faults only, so it never runs axe. Any failure, a slow page included,
+      // is recorded as unmeasured rather than failing the run or passing silently.
+      if (opts.axe && !opts.stress)
+        facts.axe = await within(
+          // Deferred so a missing axe-core build is caught below, like any other failure.
+          Promise.resolve().then(() =>
+            inWorld<NonNullable<AuditFacts['axe']>>(page, runAxe, [...AXE_TAGS], opts.axeScript ?? axeSource()),
+          ),
+          timeout,
+          'running axe-core',
+        ).catch((e: Error) => ({ error: e.message || String(e) }));
       // The private origin's own favicon probe is not the page's fault.
       facts.runtime = {
         errors,
@@ -348,12 +370,15 @@ async function closeContext(ctx: BrowserContext, timeout: number): Promise<void>
  * naturalWidth cannot fake a clean reading. Falls back to the page's world only where the
  * DevTools protocol is not available.
  */
-async function inWorld<T>(page: Page, fn: (arg: never) => T, arg?: unknown): Promise<T> {
+async function inWorld<T>(page: Page, fn: (arg: never) => T | Promise<T>, arg?: unknown, prelude = ''): Promise<T> {
+  const call = `(${fn.toString()})(${arg === undefined ? '' : JSON.stringify(arg)})`;
+  // A prelude (a library's source) is evaluated as script first, in the same world.
+  const expression = prelude ? `${prelude}\n;${call}` : call;
   let cdp: import('playwright-core').CDPSession;
   try {
     cdp = await page.context().newCDPSession(page);
   } catch {
-    return page.evaluate(fn as (a: unknown) => T, arg);
+    return prelude ? page.evaluate<T>(expression) : page.evaluate(fn as (a: unknown) => T, arg);
   }
   try {
     const { frameTree } = await cdp.send('Page.getFrameTree');
@@ -362,7 +387,7 @@ async function inWorld<T>(page: Page, fn: (arg: never) => T, arg?: unknown): Pro
       worldName: 'faithful-probe',
     });
     const r = await cdp.send('Runtime.evaluate', {
-      expression: `(${fn.toString()})(${arg === undefined ? '' : JSON.stringify(arg)})`,
+      expression,
       contextId: executionContextId,
       returnByValue: true,
       awaitPromise: true,

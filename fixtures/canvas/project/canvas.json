@@ -1,0 +1,7 @@
+{
+  "v": 3,
+  "boards": {
+    "home.dc.html": { "x": 0, "y": 0, "w": 1280, "h": 2400, "title": "Home", "expand": "fill", "is_interactive": true },
+    "pricing.dc.html": { "x": 1400, "y": 0, "w": 390, "h": 700, "title": "Pricing (mobile)", "is_interactive": false }
+  }
+}

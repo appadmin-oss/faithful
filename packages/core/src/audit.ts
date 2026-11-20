@@ -21,7 +21,7 @@ import { contrastRatio, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
 import type { Finding, Kind, Severity } from './findings.js';
 
-export type { AuditFacts } from './audit-facts.js';
+export type { AuditFacts, AxeFacts, AxeRule } from './audit-facts.js';
 
 export interface AuditOptions {
   /** Minimum target size in CSS px (WCAG 2.2 AA: 24). */
@@ -70,11 +70,12 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   const slopError = o.slopError ?? 5;
   const vp = `${f.viewport.width}x${f.viewport.height}`;
   const findings: Finding[] = [];
-  const add = (kind: Kind, severity: Severity, detail: string, buildId?: string, label?: string) => {
+  const add = (kind: Kind, severity: Severity, detail: string, buildId?: string, label?: string): Finding => {
     const x: Finding = { kind, severity, detail, screen, viewport: vp };
     if (buildId) x.buildId = buildId;
     if (label) x.label = label;
     findings.push(x);
+    return x;
   };
   const phone = f.viewport.width < 600;
 
@@ -176,6 +177,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
       t.sel,
     );
   }
+  axeFindings(f, add);
   if (f.fontSizes.length > 10)
     add(
       'type-scale',
@@ -397,6 +399,67 @@ function contrastFindings(
 }
 
 /**
+ * axe-core rules Faithful already measures itself, and better for its purpose: they are not
+ * reported from axe, so one fault is never two findings. `color-contrast` → Faithful's
+ * `contrast` composites alpha, opacity and layered backgrounds as drawn and groups by colour
+ * pair; `target-size` → Faithful's `target`, the same WCAG 2.5.8 rule with the spacing
+ * exception, sized to the config's `minTarget`.
+ */
+export const AXE_MEASURED_BY_FAITHFUL: Readonly<Record<string, Kind>> = {
+  'color-contrast': 'contrast',
+  'target-size': 'target',
+};
+
+/**
+ * axe-core's verdicts as findings. One finding per failed rule (critical/serious an error,
+ * moderate/minor a warning) with how many elements it flagged and the first one; the rule's
+ * help page is kept for `faithful explain`. What axe could not decide is never a pass and
+ * never a fault: one note, counted by rule. An axe that did not run is an unmeasured warning,
+ * never a silently clean page.
+ */
+function axeFindings(
+  f: AuditFacts,
+  add: (kind: Kind, severity: Severity, detail: string, buildId?: string) => Finding,
+): void {
+  const axe = f.axe;
+  if (!axe) return;
+  if ('error' in axe) {
+    add(
+      'unmeasured',
+      'warn',
+      `axe-core did not run (${axe.error.split('\n')[0]?.slice(0, 100)}): the WCAG rules beyond Faithful's own are unmeasured`,
+    );
+    return;
+  }
+  const own = (r: { id: string }) => !Object.hasOwn(AXE_MEASURED_BY_FAITHFUL, r.id);
+  // The rule id names the fault; the help line only reminds. The long ones run to 118 characters.
+  const short = (t: string) => (t.length <= 60 ? t : `${t.slice(0, 59).replace(/\s+\S*$/, '')}…`);
+  for (const r of axe.violations.filter(own)) {
+    const x = add(
+      'a11y',
+      r.impact === 'critical' || r.impact === 'serious' ? 'error' : 'warn',
+      `${r.id}: ${short(r.help)}${r.n > 1 ? ` (×${r.n})` : ''}`,
+      r.sel || undefined,
+    );
+    if (r.helpUrl) x.help = r.helpUrl.replace(/\?.*$/, '');
+  }
+  const review = axe.incomplete.filter(own);
+  if (review.length) {
+    const n = review.reduce((t, r) => t + r.n, 0);
+    const MAX = 4;
+    add(
+      'a11y',
+      'info',
+      `needs review: axe-core could not decide ${n} element${n === 1 ? '' : 's'} (${review
+        .slice(0, MAX)
+        .map((r) => `${r.id} ×${r.n}`)
+        .join(', ')}${review.length > MAX ? `, +${review.length - MAX} rules` : ''}): check by hand`,
+      review[0]?.sel || undefined,
+    );
+  }
+}
+
+/**
  * One finding per fault, not one per viewport: the same clipped label at a phone and a desktop
  * width is one thing to fix. Where the "reads as generated" summary differs between widths,
  * the widest count is kept.
@@ -415,11 +478,13 @@ export function mergeViewports(results: ScreenResult[]): void {
         return true;
       }
       // Counts that differ by width (how many texts share a colour) do not make a second fault.
+      // An axe rule is one fault per page whichever element it meets first at each width.
+      const axeRule = f.kind === 'a11y' ? /^[^:]+/.exec(f.detail)?.[0] : undefined;
       const detail = f.detail.replace(
         /\d+px wide in a \d+px screen|×\d+ texts|for \d+ texts?|\d+ more|\(\d+ texts\)/g,
         '#',
       );
-      const key = `${f.kind}|${f.buildId ?? ''}|${detail}`;
+      const key = axeRule ? `a11y|${f.severity}|${axeRule}` : `${f.kind}|${f.buildId ?? ''}|${detail}`;
       const first = seen.get(key);
       if (first) {
         if (f.viewport && first.viewport && !first.viewport.includes(f.viewport)) first.viewport += `,${f.viewport}`;

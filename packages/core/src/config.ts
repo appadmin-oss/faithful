@@ -44,6 +44,10 @@ export interface FaithfulConfig {
   /** How many findings the compact report shows before "+N more". */
   maxFindings: number;
   guards: GuardConfig;
+  audit: {
+    /** Run axe-core's WCAG 2.2 A/AA rules in `faithful audit` (on by default). */
+    axe: boolean;
+  };
 }
 
 export const DEFAULT_CONFIG: FaithfulConfig = {
@@ -77,6 +81,7 @@ export const DEFAULT_CONFIG: FaithfulConfig = {
       'inline-style': false,
     },
   },
+  audit: { axe: true },
 };
 
 export class ConfigError extends Error {

@@ -50,7 +50,7 @@ export const specAdapter: Adapter = {
 
 // ── Tokens ───────────────────────────────────────────────────────────────────
 
-const px = (v: string | number): number | null => {
+export const px = (v: string | number): number | null => {
   if (typeof v === 'number') return v;
   const m = /^(-?\d*\.?\d+)(px|rem)?$/.exec(v.trim());
   if (!m) return null;

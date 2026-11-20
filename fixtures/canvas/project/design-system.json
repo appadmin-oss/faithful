@@ -1,0 +1,6 @@
+{
+  "name": "Calm",
+  "description": "A small synthetic design system for Faithful's tests.",
+  "themes": ["light", "dark"],
+  "tokens": "tokens.json"
+}

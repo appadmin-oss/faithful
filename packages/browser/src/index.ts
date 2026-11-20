@@ -1,4 +1,5 @@
 export { auditProbe } from './audit-probe.js';
+export { AXE_TAGS } from './axe.js';
 export {
   BrowserError,
   type CaptureOptions,

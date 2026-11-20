@@ -25,7 +25,7 @@ async function run(file: string) {
     { width: 375, height: 812 },
     { width: 1440, height: 900 },
   ]) {
-    results.push(scoreAudit(await r.audit({ html, baseDir: FIX }, vp), `audit@${vp.width}`));
+    results.push(scoreAudit(await r.audit({ html, baseDir: FIX }, vp, { axe: true }), `audit@${vp.width}`));
   }
   mergeViewports(results);
   return results.flatMap((x) => x.findings);
@@ -59,6 +59,13 @@ describe('audit probe', () => {
     expect(has('wording', /named only "click here"/)).toBe(true);
     expect(has('wording', /"Submit"/)).toBe(true);
     expect(has('wording', /Sign in \/ Log in/)).toBe(true);
+    // axe-core: the unlabelled coupon field, once. axe also fails the planted contrast and the
+    // tiny targets, but Faithful reports those itself: never a second finding for them.
+    expect(f.filter((x) => x.kind === 'a11y').map((x) => `${x.severity} ${x.detail} [${x.buildId}]`)).toEqual([
+      'error label: Form elements must have labels [input[name="coupon"]]',
+    ]);
+    expect(f.filter((x) => x.kind === 'target')).toHaveLength(2);
+    expect(f.filter((x) => x.kind === 'unmeasured')).toEqual([]);
     // Contrast: the planted grey footnote, and the browser's default blue links on a near-black page.
     expect(has('contrast', /"Prices exclude VAT.*#4a4a5a on #0b0b12 is 2\.\d+:1 at 13px; needs 4\.5:1$/)).toBe(true);
     expect(has('contrast', /"click here" #0000ee on #0b0b12 .*\(×2 texts\)/)).toBe(true);
@@ -72,6 +79,70 @@ describe('audit probe', () => {
 
   it('the clean page has nothing to report', async () => {
     expect(await run('clean.html')).toEqual([]);
+  }, 90_000);
+});
+
+describe('axe-core inside audit', () => {
+  const GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
+  // Four faults only axe sees: a field with no label, an image with no alt, a button with no
+  // name (big enough that Faithful's own target check has nothing to say), no html lang.
+  const FAULTY = `<!doctype html><html><head><title>Plots</title><style>body{font:17px/1.5 Georgia;margin:20px;color:#111;background:#fff}button{width:44px;height:44px}</style></head><body><main><h1>Twelve plots free</h1><p>Apply before May.</p><img src="${GIF}" width="40" height="40"><form><input name="plot"><button></button></form></main></body></html>`;
+  const vps = [
+    { width: 375, height: 812 },
+    { width: 1440, height: 900 },
+  ];
+  const audited = async (html: string, opts: Parameters<Renderer['audit']>[2] = { axe: true }) => {
+    const results = [];
+    for (const vp of vps) results.push(scoreAudit(await r.audit({ html }, vp, opts), `audit@${vp.width}`));
+    mergeViewports(results);
+    return results.flatMap((x) => x.findings);
+  };
+
+  it('a missing label, alt, button name and html lang: each reported once, nothing else', async () => {
+    const f = await audited(FAULTY);
+    expect(f.map((x) => `${x.severity} ${x.kind} ${x.detail.split(':')[0]} ${x.viewport}`).sort()).toEqual([
+      'error a11y button-name 375x812,1440x900',
+      'error a11y html-has-lang 375x812,1440x900',
+      'error a11y image-alt 375x812,1440x900',
+      'error a11y label 375x812,1440x900',
+    ]);
+    expect(f.find((x) => x.detail.startsWith('image-alt'))?.help).toBe(
+      'https://dequeuniversity.com/rules/axe/4.14/image-alt',
+    );
+  }, 90_000);
+
+  it('runs in its own world: a page that plants a fake, locked window.axe cannot hide a fault', async () => {
+    // A locked, fake `axe` that always answers clean: in the page's own world it would win.
+    const fake =
+      '<script>Object.defineProperty(window,"axe",{value:{run:()=>Promise.resolve({violations:[],incomplete:[]})},writable:false,configurable:false})</script>';
+    const f = await audited(FAULTY.replace('<title>', `${fake}<title>`));
+    expect(f.filter((x) => x.kind === 'a11y')).toHaveLength(4);
+  }, 90_000);
+
+  it('what axe cannot decide is one note, never a pass and never a fault', async () => {
+    const f = await audited(
+      '<!doctype html><html lang="en"><head><title>t</title></head><body><main><p aria-describedby="nowhere">Plots</p><video controls width="200" height="100"></video></main></body></html>',
+    );
+    expect(f.map((x) => `${x.severity} ${x.kind}`)).toEqual(['info a11y']);
+    expect(f[0]?.detail).toBe(
+      'needs review: axe-core could not decide 2 elements (aria-valid-attr-value ×1, video-caption ×1): check by hand',
+    );
+  }, 90_000);
+
+  it('switched off it reports nothing; failing to run it is an unmeasured warning, never a clean page', async () => {
+    expect(await audited(FAULTY, {})).toEqual([]);
+    expect(await audited(FAULTY, { axe: false })).toEqual([]);
+    const broken = await audited(FAULTY, { axe: true, axeScript: 'throw new Error("blocked by policy")' });
+    expect(broken.map((x) => `${x.severity} ${x.kind} ${x.viewport}`)).toEqual(['warn unmeasured 375x812,1440x900']);
+    expect(broken[0]?.detail).toMatch(/^axe-core did not run \(.*blocked by policy.*\): the WCAG rules/);
+    // A build that loads but defines no axe is the same.
+    const empty = await audited(FAULTY, { axe: true, axeScript: '/* nothing */' });
+    expect(empty[0]?.detail).toMatch(/axe-core did not load/);
+  }, 90_000);
+
+  it('a stress pass never runs axe: it reports layout faults only', async () => {
+    const facts = await r.audit({ html: FAULTY }, { width: 375, height: 812 }, { axe: true, stress: 'rtl' });
+    expect(facts.axe).toBeUndefined();
   }, 90_000);
 });
 

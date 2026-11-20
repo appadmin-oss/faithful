@@ -108,6 +108,73 @@ describe('report', () => {
     expect(tokens(JSON.stringify(formatCompact(r)))).toBeLessThan(600);
   });
 
+  it('a page failing 40 axe-core rules stays under the same ceiling; the help pages only in explain', () => {
+    const base = scoreAudit(
+      {
+        viewport: { width: 375, height: 812 },
+        url: 'http://x.test/',
+        scrollWidth: 375,
+        overflow: [],
+        clipped: [],
+        overlaps: [],
+        covered: [],
+        brokenImages: [],
+        invisible: [],
+        paragraphs: [],
+        targets: [],
+        controls: [],
+        forms: [],
+        landmarks: [],
+        headings: [],
+        fontSizes: [16],
+        texts: [],
+        imageSrcs: [],
+        axe: {
+          violations: Array.from({ length: 40 }, (_, i) => ({
+            id: `label-content-name-mismatch-${i}`,
+            impact: i % 2 ? ('serious' as const) : ('moderate' as const),
+            help: 'Table cell headers attributes must refer to other <th> elements in the same table',
+            helpUrl: `https://dequeuniversity.com/rules/axe/4.14/label-content-name-mismatch-${i}?application=axeAPI`,
+            n: 10 + i,
+            sel: `main>section:nth-of-type(${i + 1})>div.card>button.icon-only`,
+          })),
+          incomplete: Array.from({ length: 30 }, (_, i) => ({
+            id: `review-rule-${i}`,
+            impact: 'serious' as const,
+            help: 'h',
+            helpUrl: 'https://dequeuniversity.com/rules/axe/4.14/x',
+            n: 3,
+            sel: 'p',
+          })),
+        },
+        slop: {
+          gradientText: [],
+          glass: [],
+          glow: [],
+          emojiIcons: [],
+          sideStripes: [],
+          nestedCards: [],
+          badgeAboveH1: null,
+          iconTiles: 0,
+          cardGrids: 0,
+          accentHues: [],
+          fonts: [],
+        },
+      },
+      'audit@375',
+    );
+    const r = summarise([base], prov, 'audit', 0);
+    expect(r.findings.filter((f) => f.kind === 'a11y')).toHaveLength(41);
+    const out = formatText(r);
+    expect(tokens(out)).toBeLessThan(400);
+    expect(out).not.toContain('dequeuniversity');
+    expect(tokens(JSON.stringify(formatCompact(r)))).toBeLessThan(600);
+    expect(JSON.stringify(formatCompact(r))).not.toContain('dequeuniversity');
+    expect(explain(r, 'F1')).toContain(
+      'more: https://dequeuniversity.com/rules/axe/4.14/label-content-name-mismatch-1',
+    );
+  });
+
   it('prints each fix sentence once per kind, not per finding', () => {
     const out = formatText(noisy(20), 20);
     expect(out.match(/Use the design copy exactly/g)).toHaveLength(1);

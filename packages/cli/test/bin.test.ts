@@ -112,6 +112,27 @@ describe('faithful (bin)', () => {
     expect(bad.err).toMatch(/--stress takes a comma list of expand, rtl, spacing; got "expand,zoom"/);
   }, 180_000);
 
+  it('axe-core: a fault only axe sees fails the audit; --no-axe or audit.axe: false skips it and says so', () => {
+    const d = tmp();
+    writeFileSync(
+      join(d, 'form.html'),
+      '<!doctype html><html lang="en"><head><title>t</title><style>body{font:17px/1.5 Georgia}input{height:30px}</style></head><body><main><h1>Plots</h1><form><input name="plot"></form></main></body></html>',
+    );
+    const on = run(d, 'audit', 'form.html', '--viewports', '800x600');
+    expect(on.code).toBe(1);
+    expect(on.out).toContain('E a11y: label: Form elements must have labels [input]');
+    expect(run(d, 'explain', 'F1').out).toContain('more: https://dequeuniversity.com/rules/axe/');
+    const off = run(d, 'audit', 'form.html', '--viewports', '800x600', '--no-axe');
+    expect(off.code).toBe(0);
+    expect(off.out).toContain('reader: axe-core off (--no-axe): WCAG rules unmeasured');
+    writeFileSync(join(d, 'faithful.config.json'), '{ "audit": { "axe": false } }');
+    const cfg = run(d, 'audit', 'form.html', '--viewports', '800x600');
+    expect(cfg.code).toBe(0);
+    expect(cfg.out).toContain('axe-core off (audit.axe: false)');
+    writeFileSync(join(d, 'faithful.config.json'), '{ "audit": { "axe": "off" } }');
+    expect(run(d, 'audit', 'form.html').code).toBe(2);
+  }, 120_000);
+
   it('selftest: every guard rule and the comparison catch their planted faults', () => {
     const r = run(tmp(), 'selftest');
     expect(r.code).toBe(0);

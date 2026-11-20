@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type AuditFacts, mergeViewports, scoreAudit, stressDelta } from '../src/audit.js';
+import { type AuditFacts, type AxeRule, mergeViewports, scoreAudit, stressDelta } from '../src/audit.js';
 
 const clean = (over: Partial<AuditFacts> = {}, slop: Partial<AuditFacts['slop']> = {}): AuditFacts => ({
   viewport: { width: 375, height: 812 },
@@ -262,6 +262,107 @@ describe('scoreAudit', () => {
       expect(all).toHaveLength(1);
       expect(all[0]?.viewport).toBe('375x812,1440x900');
     });
+  });
+});
+
+describe('scoreAudit: axe-core results', () => {
+  const rule = (id: string, impact: AxeRule['impact'], n = 1, sel = `#${id}`): AxeRule => ({
+    id,
+    impact,
+    help: `${id} help`,
+    helpUrl: `https://dequeuniversity.com/rules/axe/4.14/${id}?application=axeAPI`,
+    n,
+    sel,
+  });
+  const axe = (violations: AxeRule[], incomplete: AxeRule[] = []) => clean({ axe: { violations, incomplete } });
+
+  it('one finding per rule: critical/serious an error, moderate/minor a warning, the count and first element', () => {
+    const r = scoreAudit(
+      axe([
+        rule('label', 'critical', 3, 'input[name="q"]'),
+        rule('image-alt', 'serious'),
+        rule('list', 'moderate'),
+        rule('x', 'minor'),
+        rule('y', null),
+      ]),
+      's',
+    );
+    expect(r.findings.map((x) => `${x.severity}:${x.kind}:${x.detail}`)).toEqual([
+      'error:a11y:label: label help (×3)',
+      'error:a11y:image-alt: image-alt help',
+      'warn:a11y:list: list help',
+      'warn:a11y:x: x help',
+      'warn:a11y:y: y help',
+    ]);
+    expect(r.findings[0]?.buildId).toBe('input[name="q"]');
+    // The help page goes to `explain`, never into the one-line detail.
+    expect(r.findings[0]?.help).toBe('https://dequeuniversity.com/rules/axe/4.14/label');
+    expect(r.findings[0]?.detail).not.toMatch(/https?:/);
+    // A long help line is cut at a word, not mid-word.
+    const long = {
+      ...rule('definition-list', 'serious'),
+      help: '<dl> elements must only directly contain properly-ordered <dt> and <dd> groups',
+    };
+    expect(scoreAudit(axe([long]), 's').findings[0]?.detail).toBe(
+      'definition-list: <dl> elements must only directly contain properly-ordered…',
+    );
+  });
+
+  it('rules Faithful measures itself (contrast, target size) are never reported from axe too', () => {
+    const f = clean({
+      axe: {
+        violations: [rule('color-contrast', 'serious'), rule('target-size', 'serious')],
+        incomplete: [rule('color-contrast', 'serious', 4)],
+      },
+    });
+    expect(scoreAudit(f, 's').findings).toEqual([]);
+    // The same shape from a rule Faithful does not measure is still reported.
+    expect(kinds(axe([rule('button-name', 'critical')]))).toEqual(['error:a11y']);
+  });
+
+  it('"needs review" is one note counted by rule: never a pass, never a fault', () => {
+    const r = scoreAudit(axe([], [rule('aria-hidden-focus', 'serious', 2), rule('video-caption', 'critical')]), 's');
+    expect(r.findings.map((x) => `${x.severity}:${x.kind}`)).toEqual(['info:a11y']);
+    expect(r.findings[0]?.detail).toBe(
+      'needs review: axe-core could not decide 3 elements (aria-hidden-focus ×2, video-caption ×1): check by hand',
+    );
+    expect(r.score).toBe(100);
+  });
+
+  it('an axe that did not run is an unmeasured warning, never a clean page; switched off it says nothing', () => {
+    expect(
+      scoreAudit(clean({ axe: { error: 'axe-core did not load\n  at x' } }), 's').findings.map(
+        (x) => `${x.severity}:${x.kind}:${x.detail}`,
+      ),
+    ).toEqual([
+      "warn:unmeasured:axe-core did not run (axe-core did not load): the WCAG rules beyond Faithful's own are unmeasured",
+    ]);
+    expect(scoreAudit(clean(), 's').findings).toEqual([]);
+  });
+
+  it('merging viewports: one finding per rule, whichever element each width met first', () => {
+    const a = scoreAudit(axe([rule('label', 'critical', 2, '#a')], [rule('aria-hidden-focus', 'serious', 1)]), 'a');
+    const b = scoreAudit(
+      clean({
+        viewport: { width: 1440, height: 900 },
+        axe: {
+          violations: [rule('label', 'critical', 3, '#b')],
+          incomplete: [rule('aria-hidden-focus', 'serious', 2)],
+        },
+      }),
+      'b',
+    );
+    mergeViewports([a, b]);
+    const all = [...a.findings, ...b.findings];
+    expect(all.map((x) => `${x.severity}:${x.kind}`)).toEqual(['error:a11y', 'info:a11y']);
+    expect(all[0]?.viewport).toBe('375x812,1440x900');
+    // Two different rules on the same element stay two findings.
+    const c = scoreAudit(
+      axe([rule('label', 'critical', 1, '#a'), rule('autocomplete-valid', 'serious', 1, '#a')]),
+      'c',
+    );
+    mergeViewports([c]);
+    expect(c.findings).toHaveLength(2);
   });
 });
 

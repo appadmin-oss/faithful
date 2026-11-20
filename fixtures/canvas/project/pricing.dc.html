@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Pricing</title></head><body style="margin:0">
+<x-dc>
+  <helmet><style>
+    .page{background:#f6f4ee;color:#16302b;font:16px/24px sans-serif;padding:24px}
+    .page h1{font:700 28px/34px sans-serif;margin:0 0 16px}
+    .plan{background:#fff;border:1px solid #d9d5ca;border-radius:12px;padding:16px;margin:0 0 12px}
+  </style></helmet>
+  <main class="page">
+    <h1>Pricing</h1>
+    <sc-for list="{{ plans }}" as="p" hint-placeholder-count="2"><div class="plan">{{ p.name }}</div></sc-for>
+  </main>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic { renderVals() { return { plans: [{ name: "Starter" }, { name: "Team" }] }; } }
+</script>
+</body></html>

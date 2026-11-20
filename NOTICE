@@ -3,3 +3,8 @@ Copyright 2026 Afrovanguard
 
 This product includes software developed by Afrovanguard
 (https://github.com/appadmin-oss/faithful), licensed under the Apache License, Version 2.0.
+
+This product depends on axe-core (https://github.com/dequelabs/axe-core),
+Copyright (c) Deque Systems, Inc., licensed under the Mozilla Public License 2.0.
+axe-core is used unmodified and is distributed as its own npm package; its source code is
+available at https://github.com/dequelabs/axe-core.

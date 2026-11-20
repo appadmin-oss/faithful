@@ -67,6 +67,11 @@ export interface AuditFacts {
    * opted into `color-scheme: dark`: native form controls drawn light on a dark surface.
    */
   lightControls?: { n: number; sel: string };
+  /**
+   * axe-core's WCAG 2.2 A/AA rules, run by the renderer (not the probe): what failed, what it
+   * could not decide ("needs review"), or why it could not run. Absent when axe was switched off.
+   */
+  axe?: AxeFacts;
   texts: { sel: string; text: string }[];
   imageSrcs: string[];
   slop: {
@@ -83,3 +88,16 @@ export interface AuditFacts {
     fonts: string[];
   };
 }
+
+/** One axe-core rule's result, trimmed to what a finding needs. */
+export interface AxeRule {
+  id: string;
+  impact: 'minor' | 'moderate' | 'serious' | 'critical' | null;
+  help: string;
+  helpUrl: string;
+  /** How many elements the rule flagged, and the first one's selector. */
+  n: number;
+  sel: string;
+}
+
+export type AxeFacts = { violations: AxeRule[]; incomplete: AxeRule[] } | { error: string };

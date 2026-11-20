@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Home</title></head><body style="margin:0">
+<x-dc>
+  <helmet><style>
+    .page{background:#f6f4ee;color:#16302b;font:16px/24px sans-serif;padding:40px}
+    .page h1{font:700 40px/48px sans-serif;margin:0 0 16px}
+    .page p{margin:0 0 24px;color:#4d5a57}
+    .cta{display:inline-block;background:#1f6f50;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600}
+  </style></helmet>
+  <main class="page">
+    <h1>{{ title }}</h1>
+    <p>Plan, track and ship with your whole team.</p>
+    <a class="cta" href="#">Get started</a>
+  </main>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"title":{"default":"Work together, calmly."}}'>
+class Component extends DCLogic { renderVals() { return { title: this.props.title }; } }
+</script>
+</body></html>

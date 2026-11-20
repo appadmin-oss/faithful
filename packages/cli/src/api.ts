@@ -202,8 +202,43 @@ export interface VerifyOptions {
   also?: string[];
   /** `light` (default) or `dark`: design and build are both rendered with it. */
   colorScheme?: string;
+  /** Compare only this screen (a canvas board, a Figma frame): its id, as `outline` lists it. */
+  screen?: string;
   config?: FaithfulConfig;
   cwd?: string;
+}
+
+/** A screen's board: `home@1440` and `home@390` are one board at two viewports. */
+const boardOf = (id: string): string => id.replace(/@\d+$/, '');
+
+/**
+ * The design screens one build is compared with. A canvas of several DIFFERENT boards is
+ * several pages, and one build is one of them: without `screen` that is a bad call naming the
+ * ids, never a run that fails on every other page. Other formats (a Figma file of Desktop and
+ * Mobile frames) keep comparing every screen unless `screen` narrows them. One board at
+ * several viewports is one page, and every viewport is compared.
+ */
+export function pickScreens<T extends { id: string }>(
+  screens: T[],
+  screen: string | undefined,
+  design: string,
+  boardsArePages = true,
+): T[] {
+  const ids = [...new Set(screens.map((s) => boardOf(s.id)))];
+  if (screen !== undefined) {
+    const want = screen.trim();
+    const hit = screens.filter((s) => s.id === want || boardOf(s.id) === want);
+    if (!hit.length)
+      throw new FaithfulError(
+        `--screen ${want}: ${design} has no such screen. Screens: ${ids.join(', ') || 'none (nothing to place)'}`,
+      );
+    return hit;
+  }
+  if (boardsArePages && ids.length > 1)
+    throw new FaithfulError(
+      `${design} has ${ids.length} screens; one build is one of them. Pick it with --screen <id>: ${ids.join(', ')}`,
+    );
+  return screens;
 }
 
 /**
@@ -241,7 +276,12 @@ export async function verify(o: VerifyOptions): Promise<RunResult> {
       ? { url: o.build }
       : { html: await readFile(at(o.build), 'utf8'), baseDir: resolve(at(o.build), '..') };
     const results: ScreenResult[] = [];
-    const placed = design.screens.filter((s) => s.elements.length > 0);
+    const placed = pickScreens(
+      design.screens.filter((s) => s.elements.length > 0),
+      o.screen,
+      o.design,
+      design.provenance.adapter === 'claude-canvas',
+    );
     if (placed.length) {
       for (const ds of placed) {
         const bs = await ctx.render(buildTarget, ds.viewport, `build@${ds.viewport.width}`);
@@ -302,7 +342,7 @@ export function outline(s: FaithfulSpec, maxTexts = 24): string {
     const kinds: Record<string, number> = {};
     for (const e of sc.elements) kinds[e.kind] = (kinds[e.kind] ?? 0) + 1;
     lines.push(
-      `screen ${sc.id} ${sc.viewport.width}x${sc.viewport.height}${sc.pageHeight ? ` (page ${sc.pageHeight}px)` : ''}: ${
+      `screen ${sc.id}${sc.name && sc.name !== sc.id ? ` "${sc.name}"` : ''} ${sc.viewport.width}x${sc.viewport.height}${sc.pageHeight ? ` (page ${sc.pageHeight}px)` : ''}: ${
         Object.entries(kinds)
           .map(([k, n]) => `${n} ${k}`)
           .join(', ') || 'no elements'
@@ -471,6 +511,8 @@ export interface AuditRunOptions {
    * layout faults it adds over the normal pass.
    */
   stress?: string | readonly string[];
+  /** `false` (`--no-axe`): skip axe-core's WCAG rules this run. Default: the config's `audit.axe`. */
+  axe?: boolean;
   config?: FaithfulConfig;
   cwd?: string;
 }
@@ -481,6 +523,7 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const schemes = parseColorScheme(o.colorScheme, true);
   const stresses = parseStress(o.stress);
+  const axeOn = o.axe !== false && cfg.audit.axe;
   const session = new Session(cfg);
   try {
     const vps = parseViewports(o.viewports ?? AUDIT_VIEWPORTS, cfg.viewports);
@@ -495,7 +538,7 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
     for (const scheme of schemes)
       for (const vp of vps) {
         const browser = await session.browser();
-        const facts = await browser.audit(target, vp, { colorScheme: scheme });
+        const facts = await browser.audit(target, vp, { colorScheme: scheme, axe: axeOn });
         // Light is the default and stays unlabelled; a dark (or two-scheme) run says which is which.
         const named = schemes.length > 1 || scheme === 'dark' ? ` ${scheme}` : '';
         const r = scoreAudit(facts, `audit@${vp.width}${named}`, opts);
@@ -524,7 +567,10 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
       tier: 'rendered' as const,
       confidence: 1,
       source: o.target,
-      warnings: [] as string[],
+      // Said on every run it is off, so a clean report never hides that the WCAG rules were skipped.
+      warnings: axeOn
+        ? []
+        : [`axe-core off (${o.axe === false ? '--no-axe' : 'audit.axe: false'}): WCAG rules unmeasured`],
     };
     await withDeviations(results, o.cwd);
     const run = summarise(results, provenance, 'audit', 0);

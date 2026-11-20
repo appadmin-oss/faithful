@@ -58,6 +58,16 @@ sideways…").
   finding per colour pair and size, with a count. Text over an image, gradient, video, filter
   or blend is "not judged" (one note), never a pass. In dark mode, a page with dark styles but
   no `color-scheme` is flagged for leaving native form controls light.
+- **WCAG 2.2 A/AA, by axe-core:** [axe-core](https://github.com/dequelabs/axe-core) runs at
+  every width and theme (not in stress passes) with the `wcag2a`, `wcag2aa`, `wcag21a`,
+  `wcag21aa` and `wcag22aa` rules: missing form labels, image alt, button and link names,
+  `<html lang>`, ARIA misuse and more. One finding per rule (`a11y`; critical/serious an error,
+  moderate/minor a warning) with a count and the first element; `faithful explain` gives the
+  rule's help page. `color-contrast` and `target-size` are left to Faithful's own `contrast`
+  and `target` checks, so one fault is never two findings. What axe cannot decide ("needs
+  review") is one note, never a pass. If axe cannot run, the run says so (`unmeasured`), never
+  clean. `--no-axe`, or `"audit": { "axe": false }` in `faithful.config.json`, switches it off;
+  the report then says the WCAG rules were unmeasured. axe does not enter iframes.
 - **Reading:** lines longer than 75 characters, tight line height, small body text, targets
   under 24px, more than ten font sizes.
 - **Wording:** links named "click here", a row of "Learn more" links to different places,
@@ -100,6 +110,8 @@ losses.
 | Design | How |
 |---|---|
 | Claude Design handoffs (`.dc.html`) | Rendered with or without `support.js` and their data scripts: Faithful runs the component's own logic, or falls back to its static template and says so |
+| Claude Design canvases (`project/canvas.json`, `"v": 3`) | One screen per `.dc.html` board at the board's own width (`expand: "fill"` boards are 900 high, 844 under 600px); a board not on disk is a reader warning. One build is one board: `verify --screen <id>` |
+| Claude Design design systems (`design-system.json` + `tokens.json`) | `{name, value, usage}` lists, a value per theme (`{"light": …, "dark": …}`) or a type style; every theme's colours go in the inventory |
 | HTML / JSX prototypes, dev servers, live URLs | Rendered in Chromium |
 | Figma REST exports (`GET /v1/files/:key`) | Frames become screens, frame-relative |
 | A Faithful spec (`*.faithful.json`) | Written by a design agent, or by `faithful spec` |
@@ -110,6 +122,11 @@ losses.
 A design that can be placed (it has screens) is compared element by element at its own
 viewport. One that cannot (tokens, a copy deck) is checked for **conformity**, and the result
 says `(indicative)` so nobody reports it as a match.
+
+A design of several different screens (a canvas of boards, a Figma file of pages) is several
+pages, and one build is one of them: `verify` stops (exit 2) with the screen ids until
+`--screen <id>` names one; `outline` lists them. One design at several `--viewports` is one
+page and needs no `--screen`.
 
 ## What it checks
 
@@ -179,8 +196,8 @@ that proves it was done:
 ## Commands
 
 ```
-faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
-faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both] [--stress expand,rtl,spacing]  judge a page with no design
+faithful verify <design> --build <url|file> [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both] [--stress expand,rtl,spacing] [--no-axe]  judge a page with no design
 faithful parity --before <a> --after <b> [--pages /,/x]  after a refactor or redesign: nothing lost
 faithful outline <design|folder>       what a design contains, in a few lines
 faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)
@@ -230,7 +247,7 @@ verifier.
 
 Node 22.12 or later and a Chromium. Faithful uses Playwright's browser if one is installed,
 otherwise the system Chrome or Chromium; set `FAITHFUL_CHROMIUM` to choose one.
-`faithful doctor` says which it found.
+`faithful doctor` says which it found. `faithful audit` bundles axe-core (no network needed).
 
 ## Packages
 
@@ -251,3 +268,7 @@ without it. Security reports: [SECURITY.md](SECURITY.md).
 ## Licence
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+`@faithful/browser` depends on [axe-core](https://github.com/dequelabs/axe-core) (Mozilla
+Public License 2.0, © Deque Systems), used unmodified and installed from npm alongside it; its
+source is available from that repository.

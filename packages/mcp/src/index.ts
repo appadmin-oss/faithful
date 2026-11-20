@@ -53,7 +53,7 @@ export function createServer(cwd = process.cwd()): McpServer {
     {
       title: 'Verify a build against its design',
       description:
-        'Compare a built page (URL or HTML file) with its design (Claude Design .dc.html, HTML, Figma JSON, tokens, DESIGN.md, copy deck). Returns PASS/FAIL, counts and the worst findings with one fix each. Re-run after fixing until PASS.',
+        'Compare a built page (URL or HTML file) with its design (Claude Design .dc.html or canvas.json, HTML, Figma JSON, tokens, DESIGN.md, copy deck). A design of several screens needs `screen`. Returns PASS/FAIL, counts and the worst findings with one fix each. Re-run after fixing until PASS.',
       inputSchema: z.object({
         design: z.string().describe('Design file path'),
         build: z.string().describe('Build URL or HTML file path'),
@@ -67,6 +67,10 @@ export function createServer(cwd = process.cwd()): McpServer {
           .enum(['light', 'dark'])
           .optional()
           .describe('prefers-color-scheme to render with (default light)'),
+        screen: z
+          .string()
+          .optional()
+          .describe('Compare only this screen id (a canvas board); required when the design has several'),
       }),
       outputSchema: z
         .object({
@@ -79,7 +83,7 @@ export function createServer(cwd = process.cwd()): McpServer {
         .passthrough(),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ design, build, viewports, also, max, colorScheme }) =>
+    async ({ design, build, viewports, also, max, colorScheme, screen }) =>
       guarded(async () => {
         const run = await verify({
           design,
@@ -89,6 +93,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           ...(viewports ? { viewports } : {}),
           ...(also?.length ? { also } : {}),
           ...(colorScheme ? { colorScheme } : {}),
+          ...(screen ? { screen } : {}),
         });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
@@ -102,7 +107,7 @@ export function createServer(cwd = process.cwd()): McpServer {
     {
       title: 'Audit a page with no design',
       description:
-        'Judge a page (URL or HTML file) on its own at phone and desktop width: clipped/overlapping text, sideways scroll, broken images, unrendered values, text contrast, readability, wording, AI-slop tells.',
+        'Judge a page (URL or HTML file) on its own at phone and desktop width: clipped/overlapping text, sideways scroll, broken images, unrendered values, text contrast, axe-core WCAG 2.2 AA rules, readability, wording, AI-slop tells.',
       inputSchema: z.object({
         target: z.string().describe('URL or HTML file path'),
         viewports: z.string().optional().describe('Default "375x812,1440x900"'),

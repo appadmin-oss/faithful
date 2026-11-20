@@ -18,7 +18,10 @@ describe('resolveConfig', () => {
         { width: 1440, height: 900 },
       ],
       guards: { rules: { 'no-uppercase': true }, typeScale: [12, 16, 20] },
+      audit: { axe: false },
     });
+    expect(c.audit.axe).toBe(false);
+    expect(DEFAULT_CONFIG.audit.axe).toBe(true);
     expect(c.guards.rules['no-uppercase']).toBe(true);
     expect(c.guards.rules['no-important']).toBe(true);
     expect(c.viewports[1]?.name).toBe('1440x900');
@@ -39,6 +42,8 @@ describe('resolveConfig', () => {
     bad({ tolerances: { colorPass: -3, colorFail: -1 } }, /tolerances\.colorPass/);
     bad({ tolerances: { colorPass: 3, colorFail: 1 } }, /colorPass must not exceed colorFail/);
     bad({ minTarget: -1 }, /minTarget/);
+    bad({ audit: { axe: 'no' } }, /audit\.axe should be boolean/);
+    bad({ audit: { axa: false } }, /unknown setting audit\.axa/);
     bad({ guards: { typeScale: [16, 0] } }, /guards\.typeScale\[1\]/);
   });
 

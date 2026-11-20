@@ -10,8 +10,10 @@ A builder can only match what the handoff states. Everything left unsaid gets in
 ## Ship these
 
 1. **Tokens** in one file: colours (with what each is for), type scale, spacing, radii,
-   shadows, motion. DTCG JSON, CSS custom properties or Tailwind `@theme` are all read.
-2. **Every screen at its real size**, phone and desktop, as HTML/JSX or a Figma export — not
+   shadows, motion. DTCG JSON, CSS custom properties, Tailwind `@theme` or a Claude Design
+   `design-system.json` + `tokens.json` (`{name, value, usage}`, per theme) are all read.
+2. **Every screen at its real size**, phone and desktop, as HTML/JSX, Claude Design boards on a
+   canvas (each board's `w` is its size; its file name is its `--screen` id) or a Figma export — not
    only screenshots; source carries exact values, a picture carries guesses.
 3. **Every state**: default, hover, focus, pressed, disabled, loading, empty, error, offline,
    signed out. Drawn, or written down.
