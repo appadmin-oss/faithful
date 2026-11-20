@@ -100,19 +100,54 @@ function pairUp(
   return { pairs, restD: ds.filter((_, i) => !usedD.has(i)), restB: bs.filter((_, j) => !usedB.has(j)) };
 }
 
-/** Find unmatched texts that are made of several unmatched texts on the other side. */
+/** How far from the whole a part may sit and still be one of its pieces: a wrapped line, a span beside it. */
+const NEAR_PX = 64;
+
+/** A part's box touches the whole's box grown by a margin (either side unplaced: no evidence against). */
+function near(whole: DesignElement, part: DesignElement): boolean {
+  if (!whole.box || !part.box) return true;
+  const m = Math.max(NEAR_PX, 2 * whole.box.h);
+  const w = whole.box;
+  const p = part.box;
+  return p.x < w.x + w.w + m && p.x + p.w > w.x - m && p.y < w.y + w.h + m && p.y + p.h > w.y - m;
+}
+
+/** Top to bottom, then left to right on one line. */
+function readingOrder(a: DesignElement, b: DesignElement): number {
+  if (!a.box || !b.box) return 0;
+  const line = Math.min(a.box.h, b.box.h) / 2;
+  return Math.abs(a.box.y - b.box.y) > line ? a.box.y - b.box.y : a.box.x - b.box.x;
+}
+
+/**
+ * Find unmatched texts that are made of several unmatched texts on the other side. Each part
+ * must sit near the whole and claim its OWN stretch of the whole's text, in reading order: two
+ * stray "draft" labels across the page are not "Save draft" split in two.
+ */
 function composites(wholes: DesignElement[], parts: DesignElement[]) {
   const found: Array<{ whole: DesignElement; parts: DesignElement[] }> = [];
   const taken = new Set<DesignElement>();
   for (const w of wholes) {
     const wt = normalizeText(w.text ?? '').toLowerCase();
     if (wt.length < 4) continue;
-    const inside = parts.filter((p) => {
-      if (taken.has(p)) return false;
+    const candidates = parts
+      .filter((p) => {
+        if (taken.has(p) || !near(w, p)) return false;
+        const pt = normalizeText(p.text ?? '').toLowerCase();
+        return pt.length >= 2 && pt.length < wt.length && wt.includes(pt);
+      })
+      .sort(readingOrder);
+    const inside: DesignElement[] = [];
+    let cursor = 0;
+    let covered = 0;
+    for (const p of candidates) {
       const pt = normalizeText(p.text ?? '').toLowerCase();
-      return pt.length >= 2 && pt.length < wt.length && wt.includes(pt);
-    });
-    const covered = inside.reduce((n, p) => n + normalizeText(p.text ?? '').length, 0);
+      const at = wt.indexOf(pt, cursor);
+      if (at < 0) continue;
+      inside.push(p);
+      cursor = at + pt.length;
+      covered += pt.length;
+    }
     if (inside.length >= 2 && covered >= 0.8 * wt.length) {
       for (const p of inside) taken.add(p);
       found.push({ whole: w, parts: inside });

@@ -42,6 +42,50 @@ export interface ScreenResult {
 
 export const WEIGHTS = { coverage: 0.35, position: 0.25, text: 0.15, color: 0.15, style: 0.1 } as const;
 
+/** What a finding cost the score: which tally it took from, and how much. */
+export interface Charge {
+  key: 'coverage' | 'position' | 'text' | 'color' | 'style';
+  amount: number;
+}
+
+/**
+ * How to score a screen again once some of its findings are declared deviations. Kept beside
+ * the result rather than in it: it is a function of the comparison, not part of the record.
+ */
+const RESCORE = new WeakMap<ScreenResult, (declared: ReadonlySet<Finding>) => number>();
+
+export function setRescore(r: ScreenResult, f: (declared: ReadonlySet<Finding>) => number): void {
+  RESCORE.set(r, f);
+}
+
+/**
+ * A declared deviation is a decision, not a fault: give back what its finding took from the
+ * score, so a run whose every difference is declared is not failed on the percentage.
+ */
+export function rescoreDeclared(r: ScreenResult, declared: ReadonlySet<Finding>): void {
+  const f = RESCORE.get(r);
+  if (f && declared.size) r.score = f(declared);
+}
+
+/** Tallies with the charges of the declared findings given back. */
+export function credit<T extends Record<string, Tally>>(
+  tallies: T,
+  charges: ReadonlyMap<Finding, Charge>,
+  declared: ReadonlySet<Finding>,
+): { tallies: T; coverage: number } {
+  const out = Object.fromEntries(Object.entries(tallies).map(([k, t]) => [k, { ...t }])) as T;
+  let coverage = 0;
+  for (const [f, c] of charges) {
+    if (!declared.has(f)) continue;
+    if (c.key === 'coverage') coverage += c.amount;
+    else {
+      const t = out[c.key] as Tally | undefined;
+      if (t) t.ok = Math.min(t.total, t.ok + c.amount);
+    }
+  }
+  return { tallies: out, coverage };
+}
+
 const ratio = (t: Tally): number => (t.total ? t.ok / t.total : 1);
 
 export function scoreOf(s: Omit<ScreenStats, 'designElements' | 'buildElements' | 'matched'>): number {
@@ -102,9 +146,21 @@ const METRIC_TWINS: string[][] = [
   ['cambria', 'caladea'],
 ];
 
+/** What may follow a family's name in the name of the face that drew it: weight, style, axes. */
+const FACE_SUFFIX =
+  /^(?:thin|hairline|extralight|ultralight|light|regular|normal|book|roman|medium|semibold|demibold|bold|extrabold|ultrabold|black|heavy|italic|oblique|variable|var|vf|\d+)*$/;
+
+/**
+ * Was `asked` drawn by `drawn`? The same family with a weight or style suffix ("Inter" drawn
+ * as "Inter Bold", "Inter-Regular"), or an operating system's metric twin. Never a shorter
+ * name ("Noto Sans" for "Noto Sans JP" is another font, with other glyphs) and never a longer
+ * one that is a different family ("Inter Tight" for "Inter").
+ */
 export function sameFace(asked: string, drawn: string): boolean {
   const sq = (x: string) => x.toLowerCase().replace(/[\s_-]+/g, '');
-  if (sq(drawn).startsWith(sq(asked)) || sq(asked).startsWith(sq(drawn))) return true;
+  const a0 = sq(asked);
+  const d0 = sq(drawn);
+  if (a0 && d0.startsWith(a0) && FACE_SUFFIX.test(d0.slice(a0.length))) return true;
   const a = asked.toLowerCase();
   const d = drawn.toLowerCase();
   return METRIC_TWINS.some((g) => g.includes(a) && g.includes(d));
@@ -117,7 +173,15 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
   const T = cfg.tolerances;
   const vp = `${build.viewport.width}x${build.viewport.height}`;
   const findings: Finding[] = [];
-  const add = (kind: Kind, severity: Severity, detail: string, d?: DesignElement, b?: DesignElement) => {
+  const charges = new Map<Finding, Charge>();
+  const add = (
+    kind: Kind,
+    severity: Severity,
+    detail: string,
+    d?: DesignElement,
+    b?: DesignElement,
+    charge?: Charge,
+  ) => {
     const f: Finding = { kind, severity, detail, screen: design.id, viewport: vp };
     if (d) f.id = d.id;
     if (b) f.buildId = b.id;
@@ -126,6 +190,7 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
     const box = b?.box ?? d?.box;
     if (box) f.box = box;
     findings.push(f);
+    if (charge) charges.set(f, charge);
   };
 
   const m = matchElements(design.elements, build.elements, build.viewport);
@@ -146,7 +211,10 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
   for (const d of m.missing) {
     if (!d.box && !d.text) continue;
     const sev: Severity = d.kind === 'box' ? 'warn' : 'error';
-    add('missing', sev, `${d.kind}${d.text ? ` "${snippet(d.text, 40)}"` : ''} at ${fmtBox(d.box)}`, d);
+    add('missing', sev, `${d.kind}${d.text ? ` "${snippet(d.text, 40)}"` : ''} at ${fmtBox(d.box)}`, d, undefined, {
+      key: 'coverage',
+      amount: weight(d),
+    });
   }
   for (const b of m.extra)
     add('extra', 'warn', `${b.kind}${b.text ? ` "${snippet(b.text, 40)}"` : ''} at ${fmtBox(b.box)}`, undefined, b);
@@ -270,6 +338,7 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
         `off by ${Math.round(ex)}px × ${Math.round(ey)}px from where its neighbours put it`,
         p.d,
         p.b,
+        { key: 'position', amount: 1 },
       );
 
     // Size
@@ -309,6 +378,7 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
         `${Math.round(p.d.box.w)}×${Math.round(p.d.box.h)} → ${Math.round(p.b.box.w)}×${Math.round(p.b.box.h)}`,
         p.d,
         p.b,
+        { key: 'style', amount: 1 },
       );
   });
 
@@ -342,8 +412,15 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
       if (c === 'exact') text.ok++;
       else if (c === 'case') {
         text.ok += 0.5;
-        add('case', 'warn', `"${snippet(p.d.text, 40)}" → "${snippet(p.b.text, 40)}"`, p.d, p.b);
-      } else add('text', 'error', `"${snippet(p.d.text, 48)}" → "${snippet(p.b.text, 48)}"`, p.d, p.b);
+        add('case', 'warn', `"${snippet(p.d.text, 40)}" → "${snippet(p.b.text, 40)}"`, p.d, p.b, {
+          key: 'text',
+          amount: 0.5,
+        });
+      } else
+        add('text', 'error', `"${snippet(p.d.text, 48)}" → "${snippet(p.b.text, 48)}"`, p.d, p.b, {
+          key: 'text',
+          amount: 1,
+        });
     }
     compareStyle(p, T, color, style, add, better ? new Set<Kind>(['color', 'background']) : undefined);
   }
@@ -415,10 +492,25 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
     color,
     style,
   };
-  return { screen: design.id, viewport: vp, findings, stats, score: scoreOf(stats) };
+  const result: ScreenResult = { screen: design.id, viewport: vp, findings, stats, score: scoreOf(stats) };
+  setRescore(result, (declared) => {
+    const c = credit({ position, text, color, style }, charges, declared);
+    return scoreOf({
+      ...c.tallies,
+      coverage: totalArea ? Math.min(1, (matchedArea + c.coverage) / totalArea) : 1,
+    });
+  });
+  return result;
 }
 
-type Add = (kind: Kind, severity: Severity, detail: string, d?: DesignElement, b?: DesignElement) => void;
+type Add = (
+  kind: Kind,
+  severity: Severity,
+  detail: string,
+  d?: DesignElement,
+  b?: DesignElement,
+  charge?: Charge,
+) => void;
 
 function compareStyle(
   p: Pair,
@@ -443,8 +535,8 @@ function compareStyle(
     if (e <= T.colorPass) color.ok++;
     else if (e <= T.colorFail) {
       color.ok += 0.5;
-      add(kind, 'warn', `${a} → ${b} (ΔE ${e.toFixed(1)})`, p.d, p.b);
-    } else add(kind, 'error', `${a} → ${b} (ΔE ${e.toFixed(1)})`, p.d, p.b);
+      add(kind, 'warn', `${a} → ${b} (ΔE ${e.toFixed(1)})`, p.d, p.b, { key: 'color', amount: 0.5 });
+    } else add(kind, 'error', `${a} → ${b} (ΔE ${e.toFixed(1)})`, p.d, p.b, { key: 'color', amount: 1 });
   };
   const metric = (
     kind: Kind,
@@ -457,7 +549,7 @@ function compareStyle(
     if (a === undefined || b === undefined) return;
     style.total++;
     if (Math.abs(a - b) <= tol) style.ok++;
-    else add(kind, sev, `${round(a)}${unit} → ${round(b)}${unit}`, p.d, p.b);
+    else add(kind, sev, `${round(a)}${unit} → ${round(b)}${unit}`, p.d, p.b, { key: 'style', amount: 1 });
   };
 
   if (p.d.text) {
@@ -471,7 +563,7 @@ function compareStyle(
     if (fa && fb) {
       style.total++;
       if (fa === fb) style.ok++;
-      else add('font-family', 'error', `${fa} → ${fb}`, p.d, p.b);
+      else add('font-family', 'error', `${fa} → ${fb}`, p.d, p.b, { key: 'style', amount: 1 });
     }
   }
   colour('background', ds.background, bs.background);

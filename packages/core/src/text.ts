@@ -6,10 +6,28 @@
  *     "Save draft" and "Save drafts" are 95% alike and one of them is wrong.
  */
 
-/** NFKC, typographic quotes/dashes/nbsp folded, whitespace collapsed, trimmed. Case kept. */
+const LIGATURES: Record<string, string> = {
+  '\ufb00': 'ff',
+  '\ufb01': 'fi',
+  '\ufb02': 'fl',
+  '\ufb03': 'ffi',
+  '\ufb04': 'ffl',
+  '\ufb05': 'st',
+  '\ufb06': 'st',
+};
+
+/**
+ * NFC, then only the folds a renderer or a design tool introduces on its own: typographic
+ * ligatures, full-width ASCII, typographic quotes, dashes and spaces. Whitespace collapsed,
+ * trimmed, case kept. Not NFKC: that would also fold "m²" to "m2" and "½" to "1/2", and those
+ * are different copy.
+ */
 export function normalizeText(s: string): string {
   return s
-    .normalize('NFKC')
+    .normalize('NFC')
+    .replace(/[\ufb00-\ufb06]/g, (c) => LIGATURES[c] ?? c)
+    .replace(/[\uff01-\uff5e]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+    .replace(/[\u2000-\u200a\u3000]/g, ' ')
     .replace(/[‘’‛′]/g, "'")
     .replace(/[“”‟″]/g, '"')
     .replace(/[‐-―−]/g, '-')

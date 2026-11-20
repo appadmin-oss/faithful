@@ -122,7 +122,7 @@ Findings come back root-cause first: missing, copy and size before the positions
 npx @faithful/cli init
 ```
 
-writes `faithful.config.json`, six Agent Skills under `.agents/skills/` (see [Skills](#skills)),
+writes `faithful.config.json`, twelve Agent Skills under `.agents/skills/` (see [Skills](#skills)),
 and a short block in `AGENTS.md`, because a skill does not always load itself.
 
 Or attach the MCP server: six tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
@@ -139,7 +139,7 @@ kind rather than once per finding, and the full result stays in `.faithful/last.
 
 ## Skills
 
-`npx @faithful/cli init` installs six Agent Skills into `.agents/skills/` (read by Claude Code,
+`npx @faithful/cli init` installs twelve Agent Skills into `.agents/skills/` (read by Claude Code,
 Codex, Cursor, Copilot, Gemini CLI and others). Each teaches one job and ends in the command
 that proves it was done:
 
@@ -151,9 +151,16 @@ that proves it was done:
 | `faithful-safe-redesign` | Refactoring or re-skinning working UI in small steps with a parity check after each, so nothing users could do is lost |
 | `faithful-ui-copy` | Interface wording: links that say where they go, buttons that say what they do, one name per action, useful errors |
 | `faithful-design-handoff` | For design agents: a handoff a builder can match exactly and verify automatically |
+| `faithful-ui-states` | Every state of a screen, not just the happy path: loading, empty, error, no permission, worst-case content — each audited on its own URL |
+| `faithful-responsive` | Every width from 320px to desktop: the causes of sideways scroll, viewport units, safe areas, targets — audited across five widths |
+| `faithful-accessible-forms` | Forms and custom controls everyone can use: native elements, labels, autofill, GOV.UK-style errors, visible focus |
+| `faithful-data-display` | Dashboards, tables and KPIs with real, formatted numbers and honest empty states |
+| `faithful-design-tokens` | Reusing the design system's tokens and components instead of hardcoding values, proven by `guard` and `verify` against the tokens |
+| `faithful-no-visual-change` | Upgrades and migrations that must change nothing on screen: the old build is the design, `verify` per page |
 
 `--skills faithful,faithful-ui-copy` installs only those. The source is
-[`packages/cli/skills/`](packages/cli/skills/).
+[`packages/cli/skills/`](packages/cli/skills/); why these twelve, and what was left out, is in
+[`docs/research/skills-2026-11.md`](docs/research/skills-2026-11.md).
 
 ## Commands
 
@@ -188,9 +195,14 @@ Where a build departs from its design to fix a measurable fault — text contras
 ] }
 ```
 
-A covered finding becomes a note quoting the reason; an expired entry covers nothing; an entry
-that covers nothing is reported, so the file cannot quietly turn into a list of excuses. It is
-committed and reviewed like code, and no MCP tool writes it.
+`match` names the element: whole words of its label, or its design or build id
+(case-insensitive, at least 3 characters). A finding with no element — a landmark gone, a script
+error — is matched on its detail only when the entry gives its `kind` and a phrase of 8 or more
+characters. `expires` is a `YYYY-MM-DD` date, the last day the entry counts; anything else is
+refused (exit 2), never read as "forever". A covered finding becomes a note quoting the reason
+and gives back the score it cost; an expired entry covers nothing; an entry that covers nothing
+is reported, so the file cannot quietly turn into a list of excuses. It is committed and
+reviewed like code, and no MCP tool writes it.
 
 ### Guard
 

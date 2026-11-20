@@ -41,6 +41,22 @@ describe('guards', () => {
     expect(scanFile('a.ts', "// '#ffffff'\nconst u = 'https://x.test/#abc';", all)).toEqual([]);
   });
 
+  it('`//` is a comment only where the language has one, and never inside url() or a string', () => {
+    const rules = (file: string, src: string) => scanFile(file, src, all).map((v) => `${v.rule}:${v.line}`);
+    // Plain CSS has no line comments: a protocol-relative url must not hide the rest of the line.
+    expect(rules('a.css', '.a{background:url(//cdn.x/a.png);color:#fff}')).toEqual(['no-raw-color:1']);
+    expect(rules('a.css', '.a{content:"//";color:#fff !important}')).toEqual(['no-important:1', 'no-raw-color:1']);
+    // SCSS and Less do have them…
+    expect(rules('a.scss', '// color: #fff\n.a{color:var(--x)}')).toEqual([]);
+    expect(rules('a.less', '.a{color:var(--x)} // #fff')).toEqual([]);
+    // …but not inside url() there either.
+    expect(rules('a.scss', '.a{background:url(//cdn.x/a.png);color:#fff}')).toEqual(['no-raw-color:1']);
+    expect(rules('a.ts', 'const A = styled.div`background:url(//cdn.x/a.png); color: #fff`;')).toEqual([
+      'no-raw-color:1',
+    ]);
+    expect(rules('a.ts', '// const A = styled.div`color: #fff`;')).toEqual([]);
+  });
+
   it('reads the type scale in px and rem, and refuses viewport type', () => {
     expect(fontSizePx('1rem')).toBe(16);
     expect(fontSizePx('14px')).toBe(14);

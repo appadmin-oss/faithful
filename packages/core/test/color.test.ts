@@ -53,6 +53,25 @@ describe('parseColor', () => {
   });
 });
 
+describe('parseColor edge cases', () => {
+  it('names only its own colours: "constructor" and "__proto__" are not colours, and do not throw', () => {
+    expect(parseColor('constructor')).toBeNull();
+    expect(parseColor('__proto__')).toBeNull();
+    expect(parseColor('toString')).toBeNull();
+    expect(parseColor('navy')).toEqual({ r: 0, g: 0, b: 128, a: 1 });
+  });
+  it('an alpha that is not a number is not a colour', () => {
+    expect(parseColor('rgba(0,0,0,none)')).toBeNull();
+    expect(parseColor('rgb(0 0 0 / x)')).toBeNull();
+    expect(parseColor('rgb(0 0 0 / 50%)')?.a).toBe(0.5);
+  });
+  it('reads CSS Color 4 bare saturation and lightness as percentages', () => {
+    expect(toHex(parseColor('hsl(120 50 50)') as never)).toBe(toHex(parseColor('hsl(120, 50%, 50%)') as never));
+    expect(toHex(parseColor('hsl(120 50 50)') as never)).toBe('#40bf40');
+    expect(toHex(parseColor('hsl(0deg 100% 50%)') as never)).toBe('#ff0000');
+  });
+});
+
 describe('contrast', () => {
   it('black on white is 21', () => {
     expect(contrastRatio(parseColor('#000') as never, parseColor('#fff') as never)).toBeCloseTo(21, 5);

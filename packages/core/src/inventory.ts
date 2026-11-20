@@ -10,7 +10,7 @@
  */
 import type { Inventory, Screen } from '@faithful/spec';
 import { deltaE, parseColor, toHex } from './color.js';
-import { primaryFamily, type ScreenResult, type Tally } from './compare.js';
+import { type Charge, credit, primaryFamily, type ScreenResult, setRescore, type Tally } from './compare.js';
 import type { FaithfulConfig } from './config.js';
 import type { Finding } from './findings.js';
 import { normalizeText, snippet } from './text.js';
@@ -47,7 +47,12 @@ export function checkConformity(inv: Inventory, build: Screen, cfg: FaithfulConf
   const T = cfg.tolerances;
   const vp = `${build.viewport.width}x${build.viewport.height}`;
   const findings: Finding[] = [];
-  const push = (f: Omit<Finding, 'screen' | 'viewport'>) => findings.push({ ...f, screen: screenId, viewport: vp });
+  const charges = new Map<Finding, Charge>();
+  const push = (f: Omit<Finding, 'screen' | 'viewport'>, charge?: Charge) => {
+    const full: Finding = { ...f, screen: screenId, viewport: vp };
+    findings.push(full);
+    if (charge) charges.set(full, charge);
+  };
   const color: Tally = { ok: 0, total: 0 };
   const style: Tally = { ok: 0, total: 0 };
   const text: Tally = { ok: 0, total: 0 };
@@ -80,7 +85,7 @@ export function checkConformity(inv: Inventory, build: Screen, cfg: FaithfulConf
         buildId: el.id,
       };
       if (el.box) f.box = el.box;
-      push(f);
+      push(f, { key: 'color', amount: n });
     }
   }
   const check = (list: number[], v: number | undefined, tol: number) =>
@@ -94,38 +99,51 @@ export function checkConformity(inv: Inventory, build: Screen, cfg: FaithfulConf
       else off.set(e.style.fontSize, (off.get(e.style.fontSize) ?? 0) + 1);
     }
     for (const [size, n] of off)
-      push({
-        kind: 'scale',
-        severity: 'warn',
-        detail: `${size}px used ${n}×; design sizes are ${inv.fontSizes.join(', ')}`,
-      });
+      push(
+        {
+          kind: 'scale',
+          severity: 'warn',
+          detail: `${size}px used ${n}×; design sizes are ${inv.fontSizes.join(', ')}`,
+        },
+        { key: 'style', amount: n },
+      );
   }
   if (inv.fontFamilies.length) {
     const want = new Set(inv.fontFamilies.map((f) => primaryFamily(f)));
-    const off = new Set<string>();
+    const off = new Map<string, number>();
     for (const e of build.elements) {
       const f = primaryFamily(e.style?.fontFamily);
       if (!e.text || !f) continue;
       style.total++;
       if (want.has(f)) style.ok++;
-      else off.add(f);
+      else off.set(f, (off.get(f) ?? 0) + 1);
     }
-    for (const f of off)
-      push({ kind: 'font', severity: 'error', detail: `${f} is not one of ${[...want].join(', ')}` });
+    for (const [f, n] of off)
+      push(
+        { kind: 'font', severity: 'error', detail: `${f} is not one of ${[...want].join(', ')}` },
+        { key: 'style', amount: n },
+      );
   }
-  // Copy: each design string must appear somewhere in the build's text, exactly.
-  const page = normalizeText(build.elements.map((e) => e.text ?? '').join('\n'));
+  // Copy: each design string must appear in ONE build element, exactly, as whole words —
+  // "Pay" is not found in "Payment history", nor "Log in" in a "Log" and an "in" apart.
+  const texts = build.elements.map((e) => normalizeText(e.text ?? '')).filter(Boolean);
   for (const t of inv.texts) {
     const n = normalizeText(t);
     if (n.length < 2) continue;
     text.total++;
-    if (page.includes(n)) text.ok++;
-    else push({ kind: 'copy-missing', severity: 'error', detail: `"${snippet(n, 60)}"`, label: snippet(n, 32) });
+    if (texts.some((x) => containsWords(x, n))) text.ok++;
+    else
+      push(
+        { kind: 'copy-missing', severity: 'error', detail: `"${snippet(n, 60)}"`, label: snippet(n, 32) },
+        { key: 'text', amount: 1 },
+      );
   }
 
   const ratio = (t: Tally) => (t.total ? t.ok / t.total : 1);
-  const score = Math.round((0.5 * ratio(text) + 0.3 * ratio(color) + 0.2 * ratio(style)) * 1000) / 10;
-  return {
+  const scoreOf = (x: { text: Tally; color: Tally; style: Tally }) =>
+    Math.round((0.5 * ratio(x.text) + 0.3 * ratio(x.color) + 0.2 * ratio(x.style)) * 1000) / 10;
+  const score = scoreOf({ text, color, style });
+  const result: ScreenResult = {
     screen: screenId,
     viewport: vp,
     findings,
@@ -141,4 +159,20 @@ export function checkConformity(inv: Inventory, build: Screen, cfg: FaithfulConf
     },
     score,
   };
+  setRescore(result, (declared) => scoreOf(credit({ text, color, style }, charges, declared).tallies));
+  return result;
+}
+
+const WORD = /[\p{L}\p{N}]/u;
+
+/** `hay` contains `needle` starting and ending on word boundaries (where the needle has a word character there). */
+export function containsWords(hay: string, needle: string): boolean {
+  for (let i = hay.indexOf(needle); i >= 0; i = hay.indexOf(needle, i + 1)) {
+    const before = hay[i - 1];
+    const after = hay[i + needle.length];
+    const okBefore = !before || !WORD.test(before) || !WORD.test(needle[0] as string);
+    const okAfter = !after || !WORD.test(after) || !WORD.test(needle[needle.length - 1] as string);
+    if (okBefore && okAfter) return true;
+  }
+  return false;
 }

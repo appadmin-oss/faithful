@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { compareScreens } from '../src/compare.js';
+import { compareScreens, sameFace } from '../src/compare.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
+import { checkConformity } from '../src/inventory.js';
 import { matchElements } from '../src/match.js';
 import { box, screen, text } from './helpers.js';
 
@@ -179,8 +180,84 @@ describe('matchElements', () => {
     expect(m.missing).toEqual([]);
     expect(m.extra).toEqual([]);
   });
+  it('two stray copies of one word are not a split: each part must claim its own stretch, near the whole', () => {
+    const d = [text('h', 'Your documents', 20, 20, 300, 32), text('cta', 'Save draft', 20, 100, 120, 24)];
+    // Far across the page: not pieces of the button.
+    const far = [
+      text('h', 'Your documents', 20, 20, 300, 32),
+      text('x1', 'draft', 900, 600, 50, 20),
+      text('x2', 'draft', 20, 700, 50, 20),
+    ];
+    const m = matchElements(d, far, { width: 1280, height: 800 });
+    expect(m.splits).toEqual([]);
+    const r = compareScreens(screen(d), screen(far), DEFAULT_CONFIG);
+    expect(r.findings.some((f) => f.severity === 'error' && f.id === 'cta')).toBe(true);
+    expect(r.score).toBeLessThan(100);
+    // Right beside it, but both are the same "draft": "save" is never covered.
+    const close = [
+      text('h', 'Your documents', 20, 20, 300, 32),
+      text('x1', 'draft', 20, 100, 50, 24),
+      text('x2', 'draft', 80, 100, 50, 24),
+    ];
+    expect(matchElements(d, close, { width: 1280, height: 800 }).splits).toEqual([]);
+    // The real split of the same button still is one.
+    const split = [
+      text('h', 'Your documents', 20, 20, 300, 32),
+      text('x1', 'Save', 20, 100, 40, 24),
+      text('x2', 'draft', 64, 100, 50, 24),
+    ];
+    const s = matchElements(d, split, { width: 1280, height: 800 });
+    expect(s.splits.map((x) => x.parts.map((p) => p.id))).toEqual([['x1', 'x2']]);
+    expect(
+      compareScreens(screen(d), screen(split), DEFAULT_CONFIG).findings.map((f) => `${f.severity}:${f.kind}`),
+    ).toEqual(['warn:split']);
+  });
+  it('joined text needs its parts near it too', () => {
+    const d = [text('a', 'Accept', 20, 100, 80, 24), text('b', 'cookies', 600, 500, 80, 24)];
+    const b = [text('m', 'Accept cookies', 20, 100, 160, 24)];
+    expect(matchElements(d, b, { width: 1280, height: 800 }).merges).toEqual([]);
+    const together = [text('a', 'Accept', 20, 100, 80, 24), text('b', 'cookies', 104, 100, 80, 24)];
+    expect(matchElements(together, b, { width: 1280, height: 800 }).merges).toHaveLength(1);
+  });
   it('does not pair unrelated text however close it sits', () => {
     const m = matchElements([text('a', 'Checkout', 0, 0)], [text('b', 'Settings', 0, 0)], { width: 1280, height: 800 });
     expect(m.pairs).toEqual([]);
+  });
+});
+
+describe('checkConformity copy', () => {
+  const inv = (texts: string[]) => ({ colors: [], fontSizes: [], fontFamilies: [], radii: [], texts });
+  const missing = (texts: string[], els: ReturnType<typeof text>[]) =>
+    checkConformity(inv(texts), screen(els), cfg)
+      .findings.filter((f) => f.kind === 'copy-missing')
+      .map((f) => f.label);
+  it('a design string is found as whole words inside one element, not across the page', () => {
+    const page = [
+      text('1', 'Payment history', 0, 0),
+      text('2', 'Cancellation policy', 0, 30),
+      text('3', 'Log', 0, 60),
+      text('4', 'in', 40, 60),
+    ];
+    expect(missing(['Pay', 'Cancel', 'Log in'], page)).toEqual(['Pay', 'Cancel', 'Log in']);
+  });
+  it('still finds the copy where it really is, with whitespace and typography normalised', () => {
+    const page = [text('1', 'Pay  now', 0, 0), text('2', 'Ready? Log in.', 0, 30), text('3', 'Don’t cancel', 0, 60)];
+    expect(missing(['Pay', 'Log in', "Don't cancel", 'now'], page)).toEqual([]);
+  });
+});
+
+describe('sameFace', () => {
+  it('the same family with a weight or style suffix, or a metric twin, is the same face', () => {
+    expect(sameFace('inter', 'Inter')).toBe(true);
+    expect(sameFace('inter', 'Inter Bold')).toBe(true);
+    expect(sameFace('inter', 'Inter-SemiBold Italic')).toBe(true);
+    expect(sameFace('roboto', 'Roboto Regular')).toBe(true);
+    expect(sameFace('arial', 'Liberation Sans')).toBe(true);
+  });
+  it('a shorter name, or a longer one that is another family, is a fallback', () => {
+    expect(sameFace('noto sans jp', 'Noto Sans')).toBe(false);
+    expect(sameFace('roboto slab', 'Roboto')).toBe(false);
+    expect(sameFace('inter', 'Inter Tight')).toBe(false);
+    expect(sameFace('open sans', 'Open Sans Condensed Light')).toBe(false);
   });
 });

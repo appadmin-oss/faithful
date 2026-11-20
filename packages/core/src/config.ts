@@ -94,10 +94,17 @@ export function resolveConfig(user: unknown): FaithfulConfig {
     const out: Json = { ...base };
     for (const [k, v] of Object.entries(over)) {
       if (k === '$schema') continue;
-      if (!(k in base)) throw new ConfigError(`unknown setting ${at}${k}`);
+      // Own keys only: "__proto__" or "constructor" are not settings.
+      if (!Object.hasOwn(base, k)) throw new ConfigError(`unknown setting ${at}${k}`);
       const b = base[k];
-      if (isObj(b) && isObj(v) && k !== 'rules') out[k] = merge(b, v, `${at}${k}.`);
-      else if (k === 'rules' && isObj(b) && isObj(v)) out[k] = { ...b, ...v };
+      if (k === 'rules' && isObj(b) && isObj(v)) {
+        for (const [id, on] of Object.entries(v)) {
+          if (!Object.hasOwn(b, id))
+            throw new ConfigError(`unknown rule ${at}rules.${id}; rules are: ${Object.keys(b).join(', ')}`);
+          if (typeof on !== 'boolean') throw new ConfigError(`${at}rules.${id} should be true or false`);
+        }
+        out[k] = { ...b, ...v };
+      } else if (isObj(b) && isObj(v)) out[k] = merge(b, v, `${at}${k}.`);
       else if (typeof b !== typeof v || Array.isArray(b) !== Array.isArray(v)) {
         throw new ConfigError(`${at}${k} should be ${Array.isArray(b) ? 'an array' : typeof b}`);
       } else out[k] = v;
@@ -105,11 +112,40 @@ export function resolveConfig(user: unknown): FaithfulConfig {
     return out;
   };
   const cfg = merge(structuredClone(DEFAULT_CONFIG) as unknown as Json, user, '') as unknown as FaithfulConfig;
+  const num = (key: string, v: number, lo: number, hi = Number.POSITIVE_INFINITY, int = false) => {
+    if (!Number.isFinite(v) || v < lo || v > hi || (int && !Number.isInteger(v)))
+      throw new ConfigError(
+        `${key} should be ${int ? 'a whole number' : 'a number'} ${hi === Number.POSITIVE_INFINITY ? `of at least ${lo}` : `from ${lo} to ${hi}`}, got ${JSON.stringify(v)}`,
+      );
+  };
+  num('passScore', cfg.passScore, 0, 100);
+  num('maxFindings', cfg.maxFindings, 1, Number.POSITIVE_INFINITY, true);
+  num('minTarget', cfg.minTarget, 0);
+  for (const [k, v] of Object.entries(cfg.tolerances)) num(`tolerances.${k}`, v, 0, k.endsWith('ct') ? 1 : undefined);
   if (cfg.tolerances.colorPass > cfg.tolerances.colorFail)
     throw new ConfigError('tolerances.colorPass must not exceed colorFail');
+  const strings = (key: string, list: unknown[]) => {
+    for (const x of list)
+      if (typeof x !== 'string') throw new ConfigError(`${key} should list strings, got ${JSON.stringify(x)}`);
+  };
+  strings('ignore', cfg.ignore);
+  strings('guards.include', cfg.guards.include);
+  strings('guards.exclude', cfg.guards.exclude);
+  strings('guards.tokenFiles', cfg.guards.tokenFiles);
+  for (const [i, x] of cfg.guards.typeScale.entries()) num(`guards.typeScale[${i}]`, x, 1);
   if (!cfg.viewports.length) throw new ConfigError('viewports cannot be empty');
-  for (const v of cfg.viewports) {
-    if (!(v.width > 0 && v.height > 0)) throw new ConfigError(`viewport ${v.name} needs a positive width and height`);
-  }
+  cfg.viewports.forEach((v, i) => {
+    if (!isObj(v)) throw new ConfigError(`viewports[${i}] should be { "name", "width", "height" }`);
+    for (const k of Object.keys(v))
+      if (!['name', 'width', 'height'].includes(k)) throw new ConfigError(`unknown setting viewports[${i}].${k}`);
+    if (v.name !== undefined && typeof v.name !== 'string')
+      throw new ConfigError(`viewports[${i}].name should be a string`);
+    for (const k of ['width', 'height'] as const) {
+      const n = v[k] as unknown;
+      if (typeof n !== 'number' || !Number.isInteger(n) || n <= 0)
+        throw new ConfigError(`viewports[${i}].${k} should be a positive whole number of px, got ${JSON.stringify(n)}`);
+    }
+    v.name ??= `${v.width}x${v.height}`;
+  });
   return cfg;
 }

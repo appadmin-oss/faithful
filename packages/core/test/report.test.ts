@@ -25,7 +25,8 @@ function noisy(n: number) {
   const b = d.map((e, i) => ({
     ...e,
     id: `div:nth-child(${i})`,
-    text: i % 2 ? `Built line number ${i} with other words` : e.text,
+    // Odd lines reworded (errors), every fourth line re-capitalised (a warning).
+    text: i % 2 ? `Built line number ${i} with other words` : i % 4 === 2 ? e.text.toUpperCase() : e.text,
     style: { ...e.style, fontSize: i % 3 ? 16 : 15 },
   }));
   return summarise([compareScreens(screen(d), screen(b), DEFAULT_CONFIG)], prov, 'placed', 90);
@@ -43,7 +44,14 @@ describe('report', () => {
     expect(r.findings.length).toBeGreaterThan(20);
     const out = formatText(r);
     expect(tokens(out)).toBeLessThan(400);
-    expect(out).toContain(`+${r.findings.length - 8} more`);
+    // "+N more" counts what is listed — errors and warnings — never the notes.
+    const withNotes = {
+      ...r,
+      findings: [...r.findings, { kind: 'offset' as const, severity: 'info' as const, detail: 'shifted' }],
+    };
+    const act = withNotes.findings.filter((f) => f.severity !== 'info').length;
+    expect(formatText(withNotes)).toContain(`+${act - 8} more`);
+    expect(formatText(withNotes)).not.toContain(`+${withNotes.findings.length - 8} more`);
     expect(tokens(JSON.stringify(formatCompact(r)))).toBeLessThan(600);
   });
 
@@ -55,7 +63,40 @@ describe('report', () => {
   it('errors come before warnings', () => {
     const r = noisy(20);
     const sev = r.findings.map((f) => f.severity);
-    expect(sev.indexOf('warn') === -1 || sev.lastIndexOf('error') < sev.indexOf('warn')).toBe(true);
+    // The run must have both, or the ordering is not being tested.
+    expect(sev).toContain('error');
+    expect(sev).toContain('warn');
+    expect(sev.lastIndexOf('error')).toBeLessThan(sev.indexOf('warn'));
+  });
+
+  it('a run that fails on the score alone says so', () => {
+    const shell = {
+      screen: 's',
+      viewport: '1280x800',
+      stats: compareScreens(screen([]), screen([]), DEFAULT_CONFIG).stats,
+    };
+    const clean = summarise([{ ...shell, findings: [], score: 87 }], prov, 'placed', 90);
+    expect(clean.pass).toBe(false);
+    expect(formatText(clean)).toMatch(/^faithful FAIL clean · 87% match < passScore 90 · placed/);
+    expect(formatCompact(clean).passScore).toBe(90);
+    const warned = summarise(
+      [{ ...shell, findings: [{ kind: 'case', severity: 'warn', detail: '"a" → "A"' }], score: 96 }],
+      prov,
+      'placed',
+      99,
+    );
+    expect(formatText(warned)).toMatch(/^faithful FAIL 0E 1W · 96% match < passScore 99/);
+    // Failing on an error is not blamed on the score; passing says nothing about it.
+    const errored = summarise(
+      [{ ...shell, findings: [{ kind: 'text', severity: 'error', detail: 'x' }], score: 80 }],
+      prov,
+      'placed',
+      90,
+    );
+    expect(formatText(errored)).not.toContain('passScore');
+    expect(formatText(summarise([{ ...shell, findings: [], score: 95 }], prov, 'placed', 90))).toMatch(
+      /^faithful PASS clean · 95% match · placed/,
+    );
   });
 
   it('explains a finding by its reference', () => {

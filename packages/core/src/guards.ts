@@ -49,8 +49,52 @@ const lineAt = (text: string, idx: number): number => {
   return n;
 };
 
+/** Stylesheet languages with `//` line comments. Plain CSS has none: `//` there is part of a value. */
+const SLASH_CSS = /\.(scss|sass|less|styl)$/i;
+
+/**
+ * Blank `//` line comments, but never inside a string or a `url(…)`: `url(//cdn.x/a.png)` in a
+ * stylesheet is a protocol-relative address, not the start of a comment that hides the rest of
+ * the line.
+ */
+function stripLineComments(t: string): string {
+  let out = '';
+  let quote = '';
+  let url = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i] as string;
+    if (quote) {
+      if (c === '\\') {
+        out += c + (t[i + 1] ?? '');
+        i++;
+        continue;
+      }
+      if (c === quote || c === '\n') quote = '';
+      out += c;
+      continue;
+    }
+    if (url) {
+      if (c === ')') url = false;
+      out += c;
+      continue;
+    }
+    if (c === '"' || c === "'") quote = c;
+    else if (/^url\($/i.test(t.slice(Math.max(0, i - 3), i + 1))) url = true;
+    else if (c === '/' && t[i + 1] === '/' && !/[:\\]/.test(t[i - 1] ?? '')) {
+      const end = t.indexOf('\n', i);
+      const stop = end < 0 ? t.length : end;
+      out += ' '.repeat(stop - i);
+      i = stop - 1;
+      continue;
+    }
+    out += c;
+  }
+  return out;
+}
+
 /** Blank out comments, keeping every newline so line numbers stay true. */
-function stripComments(text: string, lang: Lang): string {
+function stripComments(text: string, path: string): string {
+  const lang = langOf(path);
   const blank = (m: string) => m.replace(/[^\n]/g, ' ');
   let t = text.replace(/\/\*[\s\S]*?\*\//g, blank);
   if (lang === 'markup')
@@ -58,10 +102,7 @@ function stripComments(text: string, lang: Lang): string {
       .replace(/<!--[\s\S]*?-->/g, blank)
       .replace(/\{#[\s\S]*?#\}/g, blank)
       .replace(/\{\{--[\s\S]*?--\}\}/g, blank);
-  if (lang === 'script' || lang === 'native' || lang === 'css') {
-    // `//` line comments, but not inside a URL (`https://`).
-    t = t.replace(/(^|[^:"'\\])\/\/[^\n]*/g, (m, pre: string) => pre + blank(m.slice(pre.length)));
-  }
+  if (lang === 'script' || lang === 'native' || (lang === 'css' && SLASH_CSS.test(path))) t = stripLineComments(t);
   return t;
 }
 
@@ -124,7 +165,7 @@ function cssRule(id: string, test: (prop: string, value: string, cfg: GuardConfi
   return (path: string, text: string, cfg: GuardConfig): Violation[] => {
     const lang = langOf(path);
     const out: Violation[] = [];
-    for (const c of cssChunks(stripComments(text, lang), lang)) {
+    for (const c of cssChunks(stripComments(text, path), lang)) {
       for (const [p, v, line] of declarations(c)) {
         const msg = test(p, v, cfg, path);
         if (msg) out.push({ rule: id, file: path, line, text: msg });
@@ -137,7 +178,7 @@ function cssRule(id: string, test: (prop: string, value: string, cfg: GuardConfi
 /** Lines of a file matching a pattern, for rules that are not about CSS declarations. */
 function lines(id: string, path: string, text: string, re: RegExp, msg: (m: RegExpMatchArray) => string): Violation[] {
   const out: Violation[] = [];
-  const t = stripComments(text, langOf(path));
+  const t = stripComments(text, path);
   for (const m of t.matchAll(new RegExp(re.source, re.flags.includes('g') ? re.flags : `${re.flags}g`))) {
     if (m.index === undefined) continue;
     out.push({ rule: id, file: path, line: lineAt(t, m.index), text: msg(m) });

@@ -27,6 +27,7 @@ import {
   OUT_DIR,
   outlineAny,
   parity,
+  parseMax,
   parseViewports,
   readDesign,
   Session,
@@ -79,7 +80,7 @@ async function main(argv: string[]): Promise<number> {
     return 0;
   }
   const cfg = await loadConfig(process.cwd(), v.config);
-  const max = v.max ? Number(v.max) : cfg.maxFindings;
+  const max = parseMax(v.max, cfg.maxFindings);
 
   switch (cmd) {
     case 'verify': {

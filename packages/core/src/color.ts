@@ -62,7 +62,8 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
 export function parseColor(input: string | undefined | null): Rgba | null {
   if (!input) return null;
   let s = input.trim().toLowerCase();
-  if (s in NAMED) s = NAMED[s] as string;
+  // Own keys only: "constructor" is not a colour.
+  if (Object.hasOwn(NAMED, s)) s = NAMED[s] as string;
   if (s.startsWith('#')) {
     let h = s.slice(1);
     if (!/^[0-9a-f]+$/.test(h) || ![3, 4, 6, 8].includes(h.length)) return null;
@@ -78,14 +79,18 @@ export function parseColor(input: string | undefined | null): Rgba | null {
     .filter(Boolean);
   if (parts.length < 3) return null;
   const alpha = parts[3] !== undefined ? clamp(num(parts[3]), 0, 1) : 1;
+  // `none`, or anything else that is not a number, is not an alpha we can compare.
+  if (Number.isNaN(alpha)) return null;
   if ((m[1] as string).startsWith('rgb')) {
     const [r, g, b] = parts.slice(0, 3).map((p) => clamp(num(p, true), 0, 255)) as [number, number, number];
     if ([r, g, b].some(Number.isNaN)) return null;
     return { r, g, b, a: alpha };
   }
   const h = ((Number.parseFloat(parts[0] as string) % 360) + 360) % 360;
-  const sat = clamp(num(parts[1] as string), 0, 1);
-  const light = clamp(num(parts[2] as string), 0, 1);
+  // CSS Color 4 allows bare numbers for saturation and lightness: `hsl(120 50 50)` is 50%.
+  const pct = (p: string) => (p.trim().endsWith('%') ? num(p) : Number.parseFloat(p) / 100);
+  const sat = clamp(pct(parts[1] as string), 0, 1);
+  const light = clamp(pct(parts[2] as string), 0, 1);
   if ([h, sat, light].some(Number.isNaN)) return null;
   const [r, g, b] = hslToRgb(h, sat, light);
   return { r, g, b, a: alpha };

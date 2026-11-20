@@ -23,6 +23,8 @@ export interface RunResult {
   /** Below 0.5 confidence, or conformity mode: the result is indicative. */
   indicative: boolean;
   counts: { error: number; warn: number; info: number };
+  /** The score a run with no errors needs to pass. */
+  passScore?: number;
   screens: ScreenResult[];
   findings: Finding[];
 }
@@ -45,10 +47,15 @@ export function summarise(
     provenance,
     indicative: mode === 'conformity' || provenance.confidence < 0.5,
     counts,
+    passScore,
     screens,
     findings,
   };
 }
+
+/** Failed on the percentage alone: no errors, but under the score the config asks for. */
+const shortOfScore = (r: RunResult): boolean =>
+  !r.pass && r.counts.error === 0 && r.screens.length > 0 && r.passScore !== undefined && r.score < r.passScore;
 
 /** Stable short reference for a finding, so `explain F3` means the same thing every time. */
 export const ref = (i: number): string => `F${i + 1}`;
@@ -73,8 +80,11 @@ export function formatText(r: RunResult, max = 8, resultPath = '.faithful/last.j
   // as "FAIL 99/100" the two read as a contradiction, so the counts sit beside the verdict and
   // the similarity is named for what it is.
   const counts = c.error || c.warn ? `${c.error}E ${c.warn}W` : 'clean';
-  const match = r.mode === 'audit' || r.mode === 'parity' ? '' : ` · ${Math.floor(r.score)}% match`;
-  const head = `faithful ${verdict} ${counts}${match}${notes} · ${r.mode}${r.indicative ? ' (indicative)' : ''} · ${r.provenance.format}`;
+  // A FAIL with nothing listed must still say why: the score is under the bar.
+  const short = shortOfScore(r) ? ` < passScore ${r.passScore}` : '';
+  const why = !r.pass && !r.screens.length ? ' · nothing was compared' : '';
+  const match = r.mode === 'audit' || r.mode === 'parity' ? short : ` · ${Math.floor(r.score)}% match${short}`;
+  const head = `faithful ${verdict} ${counts}${match}${why}${notes} · ${r.mode}${r.indicative ? ' (indicative)' : ''} · ${r.provenance.format}`;
   // Errors and warnings are listed; notes (an overall offset, a fault the design has too) are
   // counted by kind in one line. A passing run with forty inherited notes is still two lines.
   const act = r.findings.filter((f) => f.severity !== 'info');
@@ -106,6 +116,7 @@ export function formatCompact(r: RunResult, max = 8) {
     pass: r.pass,
     score: r.score,
     counts: r.counts,
+    ...(shortOfScore(r) ? { passScore: r.passScore } : {}),
     mode: r.mode,
     indicative: r.indicative,
     top: r.findings

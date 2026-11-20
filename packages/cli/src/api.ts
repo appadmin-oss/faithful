@@ -4,7 +4,7 @@
  */
 import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ADAPTERS } from '@faithful/adapters';
 import { Renderer } from '@faithful/browser';
 import {
@@ -25,6 +25,7 @@ import {
   type ReadContext,
   type RunResult,
   ratchet,
+  rescoreDeclared,
   resolveConfig,
   type ScreenResult,
   type SourceInput,
@@ -44,14 +45,38 @@ export class FaithfulError extends Error {
   override readonly name = 'FaithfulError';
 }
 
+/** Read a JSON file Faithful owns; a syntax error names the file, not just a position. */
+async function readJson(path: string, name: string): Promise<unknown> {
+  const raw = await readFile(path, 'utf8');
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    throw new FaithfulError(`${name} is not valid JSON: ${(e as Error).message}`);
+  }
+}
+
 /** Read `faithful.config.json` from `cwd` (or defaults). */
 export async function loadConfig(cwd = process.cwd(), file?: string): Promise<FaithfulConfig> {
-  const path = resolve(cwd, file ?? 'faithful.config.json');
+  const name = file ?? 'faithful.config.json';
+  const path = resolve(cwd, name);
   if (!existsSync(path)) {
     if (file) throw new FaithfulError(`config not found: ${file}`);
     return structuredClone(DEFAULT_CONFIG);
   }
-  return resolveConfig(JSON.parse(await readFile(path, 'utf8')));
+  const json = await readJson(path, name);
+  try {
+    return resolveConfig(json);
+  } catch (e) {
+    throw new FaithfulError(`${name}: ${(e as Error).message}`);
+  }
+}
+
+/** `--max`: how many findings to list. A typo is a bad call, not an empty report. */
+export function parseMax(s: string | undefined, fallback: number): number {
+  if (s === undefined || s === '') return fallback;
+  if (!/^\d+$/.test(s.trim()) || Number(s) < 1)
+    throw new FaithfulError(`--max must be a positive whole number, got "${s}"`);
+  return Number(s);
 }
 
 export const isUrl = (s: string): boolean => /^https?:\/\//i.test(s);
@@ -143,20 +168,25 @@ export interface VerifyOptions {
 export async function verify(o: VerifyOptions): Promise<RunResult> {
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const session = new Session(cfg);
+  // Every path is read against the caller's folder, as audit and parity read theirs: an MCP
+  // server started elsewhere must not compare some other design.html.
+  const cwd = o.cwd ?? process.cwd();
+  const at = (p: string) => (isUrl(p) ? p : resolve(cwd, p));
   try {
     const vps = parseViewports(o.viewports, cfg.viewports);
-    const design = await readDesign(o.design, session, vps);
+    const design = await readDesign(at(o.design), session, vps);
     const extra: Inventory[] = [];
     for (const a of o.also ?? []) {
-      const s = await readDesign(a, session, vps);
+      const s = await readDesign(at(a), session, vps);
       if (s.inventory) extra.push(s.inventory);
       for (const sc of s.screens) extra.push(inventoryOf(sc));
       design.provenance.warnings.push(...s.provenance.warnings.map((w) => `${a}: ${w}`));
     }
     const ctx = session.context(vps);
+    if (!isUrl(o.build) && !existsSync(at(o.build))) throw new FaithfulError(`not found: ${o.build}`);
     const buildTarget = isUrl(o.build)
       ? { url: o.build }
-      : { html: await readFile(o.build, 'utf8'), baseDir: resolve(o.build, '..') };
+      : { html: await readFile(at(o.build), 'utf8'), baseDir: resolve(at(o.build), '..') };
     const results: ScreenResult[] = [];
     const placed = design.screens.filter((s) => s.elements.length > 0);
     if (placed.length) {
@@ -208,7 +238,7 @@ export async function save(run: RunResult, cwd = process.cwd()): Promise<string>
 export async function lastRun(cwd = process.cwd()): Promise<RunResult> {
   const path = resolve(cwd, OUT_DIR, 'last.json');
   if (!existsSync(path)) throw new FaithfulError('no previous run: run `faithful verify` first');
-  return JSON.parse(await readFile(path, 'utf8')) as RunResult;
+  return (await readJson(path, `${OUT_DIR}/last.json`)) as RunResult;
 }
 
 /** A compact outline of a design: what an agent needs before it builds, in few tokens. */
@@ -283,7 +313,14 @@ export interface GuardResult {
 }
 
 async function listFiles(root: string, cfg: FaithfulConfig, only?: string[]): Promise<string[]> {
-  if (only?.length) return only.map((f) => relative(root, resolve(root, f)));
+  if (only?.length)
+    return only.map((f) => {
+      const rel = relative(root, resolve(root, f));
+      // Only the project's own files: a path that climbs out of it, or names another drive, is refused.
+      if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel))
+        throw new FaithfulError(`${f} is outside the project folder (${root}); guard scans only files inside it`);
+      return rel;
+    });
   const out: string[] = [];
   const skip = new Set(cfg.guards.exclude);
   const walk = async (d: string): Promise<void> => {
@@ -327,8 +364,10 @@ export async function guard(
   const bpath = resolve(cwd, BASELINE);
   if (opts.updateBaseline) await writeFile(bpath, `${JSON.stringify(countViolations(violations), null, 1)}\n`);
   const hasBaseline = existsSync(bpath);
-  const base = hasBaseline ? JSON.parse(await readFile(bpath, 'utf8')) : {};
-  const r = ratchet(violations, base);
+  const base = hasBaseline ? await readJson(bpath, BASELINE) : {};
+  if (typeof base !== 'object' || base === null || Array.isArray(base))
+    throw new FaithfulError(`${BASELINE} should be an object of rule → file → count`);
+  const r = ratchet(violations, base as Parameters<typeof ratchet>[1]);
   return { violations, regressions: r.regressions, improved: r.improved, files: files.length, baseline: hasBaseline };
 }
 
@@ -494,21 +533,24 @@ export async function withDeviations(results: ScreenResult[], cwd = process.cwd(
   const path = resolve(cwd, DEVIATIONS);
   if (!existsSync(path)) return results;
   let devs: ReturnType<typeof parseDeviations>;
+  const json = await readJson(path, DEVIATIONS);
   try {
-    devs = parseDeviations(JSON.parse(await readFile(path, 'utf8')));
+    devs = parseDeviations(json);
   } catch (e) {
     throw new FaithfulError((e as Error).message);
   }
   // Applied across the run, so an entry is "unused" only when NO screen needed it.
   const counts = results.map((r) => r.findings.length);
-  const all = applyDeviations(
-    results.flatMap((r) => r.findings),
-    devs,
-  );
+  const before = results.flatMap((r) => r.findings);
+  const all = applyDeviations(before, devs);
+  // A declared finding gives back what it took from the score: a run whose every difference
+  // was meant must not fail on the percentage those differences cost.
+  const declared = new Set(before.filter((f, k) => f.severity !== 'info' && all[k]?.severity === 'info'));
   let i = 0;
   results.forEach((r, k) => {
     r.findings = all.slice(i, i + (counts[k] as number));
     i += counts[k] as number;
+    rescoreDeclared(r, declared);
   });
   if (results[0]) results[0].findings.push(...all.slice(i));
   return results;
