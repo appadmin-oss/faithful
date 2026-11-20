@@ -107,11 +107,17 @@ export function createServer(cwd = process.cwd()): McpServer {
         target: z.string().describe('URL or HTML file path'),
         viewports: z.string().optional().describe('Default "375x812,1440x900"'),
         colorScheme: z.enum(['light', 'dark', 'both']).optional().describe('Default light; both = each viewport twice'),
+        stress: z
+          .array(z.enum(['expand', 'rtl', 'spacing']))
+          .optional()
+          .describe(
+            'Extra passes per viewport: expand = text 1.3-2x longer (translation), rtl = dir="rtl", spacing = WCAG 1.4.12. Reports only the layout faults each adds.',
+          ),
         max: z.number().int().min(1).max(50).optional(),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ target, viewports, colorScheme, max }) =>
+    async ({ target, viewports, colorScheme, stress, max }) =>
       guarded(async () => {
         const run = await audit({
           target,
@@ -119,6 +125,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           config: await loadConfig(cwd),
           ...(viewports ? { viewports } : {}),
           ...(colorScheme ? { colorScheme } : {}),
+          ...(stress?.length ? { stress } : {}),
         });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),

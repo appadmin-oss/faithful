@@ -13,6 +13,11 @@ import { type Browser, type BrowserContext, chromium, type Page } from 'playwrig
 import { auditProbe } from './audit-probe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
+import { expandText, setRtl, setSpacing } from './stress.js';
+
+/** `faithful audit --stress`: what the page is put through before it is measured. */
+export type Stress = 'expand' | 'rtl' | 'spacing';
+const STRESS = { expand: expandText, rtl: setRtl, spacing: setSpacing } as const;
 
 export interface CaptureOptions {
   ignore?: string[];
@@ -167,7 +172,7 @@ export class Renderer {
   async audit(
     target: RenderTarget,
     viewport: Viewport,
-    opts: { timeoutMs?: number; colorScheme?: 'light' | 'dark'; screenshot?: string } = {},
+    opts: { timeoutMs?: number; colorScheme?: 'light' | 'dark'; screenshot?: string; stress?: Stress } = {},
   ): Promise<AuditFacts> {
     const ctx: BrowserContext = await this.browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
@@ -195,6 +200,23 @@ export class Renderer {
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
       await this.settle(page, target, timeout);
+      if (opts.stress) {
+        // Mutated from the isolated world: the DOM is shared, so the page lays out the change.
+        const done = await within(
+          inWorld<{ applied: boolean }>(page, STRESS[opts.stress]),
+          timeout,
+          'stressing the page',
+        );
+        if (!done.applied)
+          throw new BrowserError(
+            `the ${opts.stress} pass could not be applied to this page, so what it would find is unmeasured`,
+          );
+        await within(
+          page.evaluate(() => new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())))),
+          timeout,
+          'waiting for layout',
+        );
+      }
       const facts: AuditFacts = await within(inWorld<AuditFacts>(page, auditProbe), timeout, 'measuring the page');
       if (opts.screenshot)
         await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });

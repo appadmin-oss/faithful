@@ -44,6 +44,11 @@ $ npx @faithful/cli audit http://localhost:3000
 Judges a page on its own, at a phone and a desktop width, and reports each fault once.
 `--color-scheme dark` renders it with `prefers-color-scheme: dark`; `--color-scheme both` runs
 every width in each theme and labels the screens (`audit@375 dark`).
+`--stress expand,rtl,spacing` adds a pass per width for each: every visible string
+pseudo-localised to the length a translation reaches (W3C ratios, 1.3–2×), `dir="rtl"`, and
+WCAG 1.4.12 text spacing. A stress pass reports only the clipped text, overlaps and sideways
+scroll it adds, saying what caused it (`audit@375 rtl`: "in right-to-left: the page scrolls
+sideways…").
 
 - **Faults a user cannot get past:** text cut off by its box or drawn over other text, a page
   that scrolls sideways on a phone, broken images, script errors, `undefined` /
@@ -129,7 +134,7 @@ Findings come back root-cause first: missing, copy and size before the positions
 npx @faithful/cli init
 ```
 
-writes `faithful.config.json`, thirteen Agent Skills under `.agents/skills/` (see [Skills](#skills)),
+writes `faithful.config.json`, fourteen Agent Skills under `.agents/skills/` (see [Skills](#skills)),
 and a short block in `AGENTS.md`, because a skill does not always load itself.
 
 Or attach the MCP server: six tools (`faithful_outline`, `faithful_verify`, `faithful_audit`,
@@ -146,7 +151,7 @@ kind rather than once per finding, and the full result stays in `.faithful/last.
 
 ## Skills
 
-`npx @faithful/cli init` installs thirteen Agent Skills into `.agents/skills/` (read by Claude Code,
+`npx @faithful/cli init` installs fourteen Agent Skills into `.agents/skills/` (read by Claude Code,
 Codex, Cursor, Copilot, Gemini CLI and others). Each teaches one job and ends in the command
 that proves it was done:
 
@@ -162,19 +167,20 @@ that proves it was done:
 | `faithful-responsive` | Every width from 320px to desktop: the causes of sideways scroll, viewport units, safe areas, targets — audited across five widths |
 | `faithful-accessible-forms` | Forms and custom controls everyone can use: native elements, labels, autofill, GOV.UK-style errors, visible focus |
 | `faithful-dark-mode` | A dark theme that is readable and complete: `color-scheme`, semantic tokens, contrast in both themes, shadows, icons, the toggle — audited with `--color-scheme both` |
+| `faithful-i18n` | UI that survives translation and right-to-left: `dir` on `<html>`, logical properties, no fixed widths, `Intl` formatting, WCAG text spacing — audited with `--stress expand,rtl,spacing` |
 | `faithful-data-display` | Dashboards, tables and KPIs with real, formatted numbers and honest empty states |
 | `faithful-design-tokens` | Reusing the design system's tokens and components instead of hardcoding values, proven by `guard` and `verify` against the tokens |
 | `faithful-no-visual-change` | Upgrades and migrations that must change nothing on screen: the old build is the design, `verify` per page |
 
 `--skills faithful,faithful-ui-copy` installs only those. The source is
-[`packages/cli/skills/`](packages/cli/skills/); why these thirteen, and what was left out, is in
+[`packages/cli/skills/`](packages/cli/skills/); why these fourteen, and what was left out, is in
 [`docs/research/skills-2026-11.md`](docs/research/skills-2026-11.md).
 
 ## Commands
 
 ```
 faithful verify <design> --build <url|file> [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
-faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design
+faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both] [--stress expand,rtl,spacing]  judge a page with no design
 faithful parity --before <a> --after <b> [--pages /,/x]  after a refactor or redesign: nothing lost
 faithful outline <design|folder>       what a design contains, in a few lines
 faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)

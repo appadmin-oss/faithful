@@ -111,7 +111,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
     add(
       'clipped',
       'error',
-      `"${c.text}" is cut off by ${c.by}px (${c.axis === 'y' ? 'bottom' : 'right'} edge of its box)`,
+      `"${c.text}" is cut off by ${c.by}px (${c.axis === 'y' ? 'bottom' : (c.side ?? 'right')} edge of its box)`,
       c.sel,
     );
   for (const o of f.overlaps) add('overlap', 'error', `"${o.text}" is drawn over "${o.other}" (${o.b})`, o.a);
@@ -429,4 +429,32 @@ export function mergeViewports(results: ScreenResult[]): void {
       return true;
     });
   }
+}
+
+/** `faithful audit --stress`: what each pass does to the page, as the finding will say it. */
+export const STRESS_CAUSE = {
+  expand: 'with text 1.3–2× longer, as in translation',
+  rtl: 'in right-to-left',
+  spacing: 'with WCAG 1.4.12 text spacing',
+} as const;
+export type StressMode = keyof typeof STRESS_CAUSE;
+
+/** The layout faults a stress pass is for; the rest of the audit is the normal pass's job. */
+const STRESS_KINDS: ReadonlySet<Kind> = new Set<Kind>(['clipped', 'overlap', 'overflow']);
+
+/**
+ * Keep only what a stress pass ADDS over the normal pass at the same viewport: a layout fault
+ * the normal pass already reported for the same element is one fault, not two. A sideways
+ * scroll is the page's, so one already reported is not reported again for another culprit.
+ * What stays says what caused it.
+ */
+export function stressDelta(normal: ScreenResult, stressed: ScreenResult, mode: StressMode): ScreenResult {
+  const key = (f: Finding) => (f.kind === 'overflow' ? 'overflow' : `${f.kind}|${f.buildId ?? ''}`);
+  const known = new Set(normal.findings.map(key));
+  const findings = stressed.findings
+    .filter((f) => STRESS_KINDS.has(f.kind) && !known.has(key(f)))
+    .map((f) => ({ ...f, detail: `${STRESS_CAUSE[mode]}: ${f.detail}` }));
+  const errors = findings.filter((x) => x.severity === 'error').length;
+  const warns = findings.filter((x) => x.severity === 'warn').length;
+  return { ...stressed, findings, score: Math.max(0, 100 - errors * 10 - warns * 3) };
 }

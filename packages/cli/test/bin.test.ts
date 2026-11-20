@@ -70,6 +70,48 @@ describe('faithful (bin)', () => {
     expect(run(d, ...args, '--color-scheme', 'dark').code).toBe(0);
   }, 120_000);
 
+  it('--stress: faults only a stress pass finds are reported once, labelled by pass; a bad value is exit 2', () => {
+    const d = tmp();
+    writeFileSync(
+      join(d, 'i18n.html'),
+      '<!doctype html><html lang="en"><head><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}.save{width:96px;white-space:nowrap;overflow:hidden;padding:12px 0;background:#1d4ed8;color:#fff;border:0;font:16px Georgia}</style></head><body><main><p>Your changes are kept for a week.</p><button class="save">Save draft</button></main></body></html>',
+    );
+    expect(run(d, 'audit', 'i18n.html', '--viewports', '375x812').code).toBe(0);
+    const r = run(
+      d,
+      'audit',
+      'i18n.html',
+      '--viewports',
+      '375x812,800x600',
+      '--stress',
+      'expand,rtl,spacing',
+      '--color-scheme',
+      'both',
+    );
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/^faithful FAIL 1E 0W/);
+    expect(r.out).toMatch(/E clipped: with text 1\.3–2× longer, as in translation: "Šàvé dràft/);
+    const last = JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8'));
+    expect(last.screens.map((s: { screen: string }) => s.screen)).toEqual(
+      ['light', 'dark'].flatMap((c) =>
+        ['375', '800'].flatMap((w) => ['', ' expand', ' rtl', ' spacing'].map((m) => `audit@${w} ${c}${m}`)),
+      ),
+    );
+    expect(last.findings[0].viewport).toBe(
+      '375x812 light expand,800x600 light expand,375x812 dark expand,800x600 dark expand',
+    );
+    // A pass the page refuses is said, not passed off as clean.
+    writeFileSync(
+      join(d, 'ltr.html'),
+      '<!doctype html><html lang="en"><head><title>t</title><style>body{direction:ltr!important}</style></head><body><main><p>Always left to right.</p></main></body></html>',
+    );
+    const refused = run(d, 'audit', 'ltr.html', '--viewports', '800x600', '--stress', 'rtl');
+    expect(refused.out).toMatch(/W unmeasured: the rtl pass could not be applied/);
+    const bad = run(d, 'audit', 'i18n.html', '--stress', 'expand,zoom');
+    expect(bad.code).toBe(2);
+    expect(bad.err).toMatch(/--stress takes a comma list of expand, rtl, spacing; got "expand,zoom"/);
+  }, 180_000);
+
   it('selftest: every guard rule and the comparison catch their planted faults', () => {
     const r = run(tmp(), 'selftest');
     expect(r.code).toBe(0);

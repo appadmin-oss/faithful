@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type AuditFacts, mergeViewports, scoreAudit } from '../src/audit.js';
+import { type AuditFacts, mergeViewports, scoreAudit, stressDelta } from '../src/audit.js';
 
 const clean = (over: Partial<AuditFacts> = {}, slop: Partial<AuditFacts['slop']> = {}): AuditFacts => ({
   viewport: { width: 375, height: 812 },
@@ -262,5 +262,50 @@ describe('scoreAudit', () => {
       expect(all).toHaveLength(1);
       expect(all[0]?.viewport).toBe('375x812,1440x900');
     });
+  });
+});
+
+describe('stressDelta (audit --stress)', () => {
+  const cut = (sel: string, side?: 'left') => ({
+    sel,
+    text: 'Save draft',
+    axis: 'x' as const,
+    by: 30,
+    ...(side ? { side } : {}),
+  });
+  it('keeps only the layout faults a pass ADDS, each saying what caused it', () => {
+    const normal = scoreAudit(clean({ clipped: [cut('.a')] }), 'n');
+    const stressed = scoreAudit(
+      clean({
+        clipped: [cut('.a'), cut('.b')],
+        overlaps: [{ a: '.c', b: '.d', text: 'One', other: 'Two' }],
+        // Not a stress pass's business: the pseudo text is not a placeholder.
+        texts: [{ sel: 'p', text: 'Lorem ipsum dolor' }],
+      }),
+      'n expand',
+    );
+    const d = stressDelta(normal, stressed, 'expand');
+    expect(d.findings.map((f) => `${f.kind} ${f.buildId}`)).toEqual(['clipped .b', 'overlap .c']);
+    expect(d.findings[0]?.detail).toMatch(/^with text 1\.3–2× longer, as in translation: "Save draft" is cut off/);
+    expect(d.score).toBe(80);
+    // Without the normal pass to subtract, .a would be reported twice.
+    expect(stressDelta(scoreAudit(clean(), 'n'), stressed, 'expand').findings).toHaveLength(3);
+  });
+
+  it('a page already scrolling sideways is not reported again for another culprit; a new sideways scroll is', () => {
+    const wide = (sel: string) => clean({ scrollWidth: 600, overflow: [{ sel, right: -200, text: '' }] });
+    const already = stressDelta(scoreAudit(wide('.x'), 'n'), scoreAudit(wide('.menu'), 'r'), 'rtl');
+    expect(already.findings).toEqual([]);
+    const fresh = stressDelta(scoreAudit(clean(), 'n'), scoreAudit(wide('.menu'), 'r'), 'rtl');
+    expect(fresh.findings.map((f) => f.detail)).toEqual([
+      expect.stringMatching(/^in right-to-left: the page scrolls sideways/),
+    ]);
+  });
+
+  it('right-to-left text cut at its start edge says the left edge', () => {
+    expect(scoreAudit(clean({ clipped: [cut('.a', 'left')] }), 's').findings[0]?.detail).toMatch(
+      /\(left edge of its box\)/,
+    );
+    expect(scoreAudit(clean({ clipped: [cut('.a')] }), 's').findings[0]?.detail).toMatch(/\(right edge of its box\)/);
   });
 });

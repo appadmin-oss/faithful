@@ -5,9 +5,11 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { mergeViewports, scoreAudit } from '@faithful/core';
+import { mergeViewports, scoreAudit, stressDelta } from '@faithful/core';
+import { type Browser, chromium } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Renderer } from '../src/index.js';
+import { expandText } from '../src/stress.js';
 
 const FIX = resolve(__dirname, '../../../fixtures/audit');
 let r: Renderer;
@@ -84,6 +86,16 @@ describe('audit probe: contrast as drawn (WCAG 1.4.3)', () => {
     );
     return { f, by };
   };
+
+  it('text cut off by its box is measured where it is seen, not on the page behind the hidden part', async () => {
+    const { by } = await colours(
+      '<div class="cut">white label far too long</div><div class="cut dim">grey label far too long</div>',
+      '.cut{background:#123;color:#fff;width:60px;overflow:hidden;white-space:nowrap}.dim{color:#333}',
+    );
+    expect(by['white label far too long']).toEqual([255, 255, 255, '/', 17, 34, 51]);
+    // A real fault in clipped text is still measured, against the right background.
+    expect(by['grey label far too long']).toEqual([51, 51, 51, '/', 17, 34, 51]);
+  });
 
   it('composites translucent backgrounds, colour alpha and every ancestor opacity', async () => {
     const { by } = await colours(
@@ -221,5 +233,128 @@ describe('audit probe: edge cases measured as a person would', () => {
       '.g{box-shadow:0 0 30px oklch(0.5 0 0 / 0.8);width:200px;height:80px}',
     );
     expect(g.slop.glow).toEqual([]);
+  });
+});
+
+describe('audit --stress: i18n and resilience passes', () => {
+  const vp = { width: 375, height: 812 };
+  const doc = (body: string, css = '', html = '<html lang="en">') =>
+    `<!doctype html>${html}<head><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}${css}</style></head><body>${body}</body></html>`;
+  /** What the stress pass adds over the normal one, as the CLI reports it. */
+  const added = async (html: string, mode: 'expand' | 'rtl' | 'spacing') => {
+    const normal = scoreAudit(await r.audit({ html }, vp), 'n');
+    const stressed = scoreAudit(await r.audit({ html }, vp, { stress: mode }), `n ${mode}`);
+    return { normal: normal.findings, added: stressDelta(normal, stressed, mode).findings };
+  };
+
+  it('expand: a fixed-width nowrap button that fits in English is cut off in translation', async () => {
+    const html = doc(
+      '<main><p>Your changes are kept for a week.</p><button class="save">Save draft</button></main>',
+      '.save{width:96px;white-space:nowrap;overflow:hidden;padding:12px 0;background:#1d4ed8;color:#fff;border:0;font:16px Georgia}',
+    );
+    const { normal, added: a } = await added(html, 'expand');
+    expect(normal).toEqual([]);
+    expect(a.map((f) => `${f.kind} ${f.buildId}`)).toEqual(['clipped main>button.save']);
+    expect(a[0]?.detail).toMatch(/^with text 1\.3–2× longer, as in translation: "Šàvé dràft/);
+    // The same button sized to its text survives.
+    const ok = await added(html.replace('width:96px;', ''), 'expand');
+    expect(ok.added).toEqual([]);
+  });
+
+  it('expand: pseudo-localises visible prose only — figures, code, form values and hidden text are left', async () => {
+    let browser: Browser | undefined;
+    const own = await Renderer.launch(async (exe) => {
+      browser = await chromium.launch(exe ? { executablePath: exe } : {});
+      return browser;
+    });
+    try {
+      const page = await (browser as Browser).newPage();
+      await page.setContent(
+        doc(
+          '<main><p id="a">Save</p><p id="n">£1,250.00 – 12/05</p><code id="c">npm install</code><pre id="p">ls -la</pre><input id="i" value="Keep me"><textarea id="t">Draft text</textarea><p id="h" aria-hidden="true">Hidden aside</p><p id="d" style="display:none">Not shown</p><p id="l">This sentence is long enough to be expanded by only one third!</p></main><script>var s = "Script text";</script>',
+        ),
+      );
+      const done = await page.evaluate(`(${expandText.toString()})()`);
+      expect(done).toEqual({ applied: true, nodes: 2 });
+      const read = (sel: string) =>
+        page.$eval(sel, (e) => (e instanceof HTMLInputElement ? e.value : (e.textContent ?? '')));
+      expect(await read('#a')).toBe('Šàvé ŀŏŕé');
+      for (const [sel, same] of [
+        ['#n', '£1,250.00 – 12/05'],
+        ['#c', 'npm install'],
+        ['#p', 'ls -la'],
+        ['#i', 'Keep me'],
+        ['#t', 'Draft text'],
+        ['#h', 'Hidden aside'],
+        ['#d', 'Not shown'],
+      ])
+        expect(await read(sel as string), sel).toBe(same);
+      // Over 50 characters: 130%, give or take the last letter.
+      const long = await read('#l');
+      const want = Math.ceil('This sentence is long enough to be expanded by only one third!'.length * 1.3);
+      expect(Math.abs(long.length - want)).toBeLessThanOrEqual(1);
+      expect(long.startsWith('Thìš šéñtéñçé ìš löñg')).toBe(true);
+    } finally {
+      await own.close();
+    }
+  });
+
+  it('rtl: a menu opened with a physical left offset spills off the page only in right-to-left', async () => {
+    const html = doc(
+      '<header><a href="/">Home</a><div class="acct"><a href="/me">Account</a><ul class="menu"><li><a href="/settings">Settings</a></li></ul></div></header><main><p>Welcome back.</p></main>',
+      'header{display:flex;justify-content:space-between;padding:12px 16px}.acct{position:relative}.menu{position:absolute;top:100%;left:-200px;width:240px;margin:0;padding:8px;list-style:none;background:#f4f4f4}',
+    );
+    const { normal, added: a } = await added(html, 'rtl');
+    expect(normal).toEqual([]);
+    expect(a.map((f) => `${f.kind} ${f.buildId}`)).toEqual(['overflow header>div.acct>ul.menu']);
+    expect(a[0]?.detail).toMatch(/^in right-to-left: the page scrolls sideways: \d+px wide in a 375px screen/);
+    // Anchored logically (inset-inline-end), it opens inward in both directions.
+    const fixed = await added(html.replace('left:-200px', 'inset-inline-end:0'), 'rtl');
+    expect(fixed.added).toEqual([]);
+  });
+
+  it('a right-to-left page: text cut off at the LEFT edge of its box is clipped (it overflows that way)', async () => {
+    const html = doc(
+      '<main><button class="save">احفظ المسودة الآن</button></main>',
+      '.save{width:60px;white-space:nowrap;overflow:hidden;padding:12px 0;background:#1d4ed8;color:#fff;border:0}',
+      '<html lang="ar" dir="rtl">',
+    );
+    const f = scoreAudit(await r.audit({ html }, vp), 'a').findings.filter((x) => x.kind === 'clipped');
+    expect(f.map((x) => x.detail)).toEqual([expect.stringMatching(/cut off by \d+px \(left edge of its box\)/)]);
+  });
+
+  it('spacing: a fixed-height box that fits its text clips it under WCAG 1.4.12 spacing, even against !important', async () => {
+    const html = doc(
+      '<main><div class="note">Bins go out on Tuesday night. Garden waste is collected every other week.</div></main>',
+      '.note{height:40px;width:300px;overflow:hidden;font:16px/20px Georgia}',
+    );
+    const { normal, added: a } = await added(html, 'spacing');
+    expect(normal).toEqual([]);
+    expect(a.map((f) => `${f.kind} ${f.buildId}`)).toEqual(['clipped main>div.note']);
+    expect(a[0]?.detail).toMatch(/^with WCAG 1\.4\.12 text spacing: "Bins go out/);
+    // A user stylesheet beats the author's !important, so the pass must too.
+    const loud = await added(
+      html.replace('</style>', '.note,body{line-height:20px!important;letter-spacing:0!important}</style>'),
+      'spacing',
+    );
+    expect(loud.added.map((f) => f.kind)).toEqual(['clipped']);
+    // min-height instead of height: the box grows and nothing is lost.
+    expect((await added(html.replace('height:40px', 'min-height:40px'), 'spacing')).added).toEqual([]);
+  });
+
+  it('a pass the page refuses is an error from the renderer, never a clean reading', async () => {
+    const html = doc('<main><p>Left to right, always.</p></main>', 'body{direction:ltr!important}');
+    await expect(r.audit({ html }, vp, { stress: 'rtl' })).rejects.toThrow(/rtl pass could not be applied/);
+  });
+
+  it('the clean page adds nothing under any pass, at either width', async () => {
+    const html = readFileSync(resolve(FIX, 'clean.html'), 'utf8');
+    for (const width of [375, 1440])
+      for (const mode of ['expand', 'rtl', 'spacing'] as const) {
+        const v = { width, height: 900 };
+        const normal = scoreAudit(await r.audit({ html, baseDir: FIX }, v), 'n');
+        const stressed = scoreAudit(await r.audit({ html, baseDir: FIX }, v, { stress: mode }), 'n');
+        expect(stressDelta(normal, stressed, mode).findings, `${mode}@${width}`).toEqual([]);
+      }
   });
 });

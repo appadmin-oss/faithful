@@ -18,6 +18,7 @@ import {
   loadConfig,
   parseColorScheme,
   parseMax,
+  parseStress,
   SKILL,
   verify,
   withDeviations,
@@ -60,6 +61,17 @@ describe('--color-scheme', () => {
     expect(() => parseColorScheme('both')).toThrow(FaithfulError);
     for (const bad of ['sepia', 'no-preference', ' '])
       expect(() => parseColorScheme(bad, true), bad).toThrow(/--color-scheme must be light, dark or both/);
+  });
+});
+
+describe('--stress', () => {
+  it('a comma list (CLI) or an array (MCP) of expand, rtl, spacing; anything else is a bad call', () => {
+    expect(parseStress(undefined)).toEqual([]);
+    expect(parseStress('expand,RTL, spacing,rtl')).toEqual(['expand', 'rtl', 'spacing']);
+    expect(parseStress(['spacing'])).toEqual(['spacing']);
+    for (const bad of ['', 'expand,', 'ltr', 'expand,zoom'])
+      expect(() => parseStress(bad), bad).toThrow(/--stress takes a comma list of expand, rtl, spacing/);
+    expect(() => parseStress(['rtl', 'zoom'])).toThrow(FaithfulError);
   });
 });
 

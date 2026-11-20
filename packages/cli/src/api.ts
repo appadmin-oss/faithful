@@ -7,7 +7,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADAPTERS } from '@faithful/adapters';
-import { Renderer } from '@faithful/browser';
+import { BrowserError, Renderer } from '@faithful/browser';
 import {
   type Adapter,
   applyDeviations,
@@ -30,9 +30,12 @@ import {
   resolveConfig,
   type ScreenResult,
   type SourceInput,
+  STRESS_CAUSE,
+  type StressMode,
   scanFile,
   scoreAudit,
   selfCheck,
+  stressDelta,
   summarise,
   type Violation,
 } from '@faithful/core';
@@ -108,6 +111,25 @@ export function parseColorScheme(s: string | undefined, allowBoth = false): Colo
   if (v === 'light' || v === 'dark') return [v];
   if (v === 'both' && allowBoth) return ['light', 'dark'];
   throw new FaithfulError(`--color-scheme must be light${allowBoth ? ', dark or both' : ' or dark'}, got "${s}"`);
+}
+
+/**
+ * `--stress`: the i18n / resilience passes an audit runs IN ADDITION to the normal one, as a
+ * comma list (CLI) or an array (MCP). An unknown name is a bad call, never silently skipped.
+ */
+export function parseStress(s: string | readonly string[] | undefined): StressMode[] {
+  if (s === undefined) return [];
+  const names = (typeof s === 'string' ? s.split(',') : [...s]).map((x) => x.trim().toLowerCase());
+  const known = Object.keys(STRESS_CAUSE) as StressMode[];
+  const out: StressMode[] = [];
+  for (const n of names) {
+    if (!known.includes(n as StressMode))
+      throw new FaithfulError(
+        `--stress takes a comma list of ${known.join(', ')}; got "${typeof s === 'string' ? s : s.join(',')}"`,
+      );
+    if (!out.includes(n as StressMode)) out.push(n as StressMode);
+  }
+  return out;
 }
 
 /** One browser for the whole run, launched only if something needs it. */
@@ -443,6 +465,12 @@ export interface AuditRunOptions {
   viewports?: string;
   /** `light` (default), `dark`, or `both`: every viewport in each, screens labelled `audit@375 dark`. */
   colorScheme?: string;
+  /**
+   * `expand` (pseudo-localised text, 1.3–2× longer), `rtl` (dir="rtl"), `spacing` (WCAG 1.4.12):
+   * each an extra pass per viewport, screens labelled `audit@375 expand`, reporting only the
+   * layout faults it adds over the normal pass.
+   */
+  stress?: string | readonly string[];
   config?: FaithfulConfig;
   cwd?: string;
 }
@@ -452,6 +480,7 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
   o = { ...o, target: localPath(o.target) };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const schemes = parseColorScheme(o.colorScheme, true);
+  const stresses = parseStress(o.stress);
   const session = new Session(cfg);
   try {
     const vps = parseViewports(o.viewports ?? AUDIT_VIEWPORTS, cfg.viewports);
@@ -462,14 +491,30 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
           baseDir: resolve(o.cwd ?? process.cwd(), o.target, '..'),
         };
     const results: ScreenResult[] = [];
+    const opts = { minTarget: Math.min(cfg.minTarget, 24) };
     for (const scheme of schemes)
       for (const vp of vps) {
-        const facts = await (await session.browser()).audit(target, vp, { colorScheme: scheme });
+        const browser = await session.browser();
+        const facts = await browser.audit(target, vp, { colorScheme: scheme });
         // Light is the default and stays unlabelled; a dark (or two-scheme) run says which is which.
         const named = schemes.length > 1 || scheme === 'dark' ? ` ${scheme}` : '';
-        const r = scoreAudit(facts, `audit@${vp.width}${named}`, { minTarget: Math.min(cfg.minTarget, 24) });
+        const r = scoreAudit(facts, `audit@${vp.width}${named}`, opts);
         if (named) for (const f of r.findings) f.viewport = `${f.viewport}${named}`;
         results.push(r);
+        for (const mode of stresses) {
+          const screen = `audit@${vp.width}${named} ${mode}`;
+          let s: ScreenResult;
+          try {
+            const stressed = await browser.audit(target, vp, { colorScheme: scheme, stress: mode });
+            s = stressDelta(r, scoreAudit(stressed, screen, opts), mode);
+          } catch (e) {
+            if (!(e instanceof BrowserError) || !/could not be applied/.test(e.message)) throw e;
+            s = { ...r, screen, score: 97, findings: [] };
+            s.findings.push({ kind: 'unmeasured', severity: 'warn', detail: e.message, screen });
+          }
+          for (const f of s.findings) f.viewport = `${f.viewport ?? `${vp.width}x${vp.height}`}${named} ${mode}`;
+          results.push(s);
+        }
       }
     mergeViewports(results);
     const provenance = {

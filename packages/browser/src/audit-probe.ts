@@ -112,6 +112,9 @@ export function auditProbe(): AuditFacts {
   const leaves = all.filter((e) => ownText(e).length > 0 && shown(e) && !srOnly(e));
 
   // ── Overflow: only when the page itself scrolls sideways ───────────────────────────
+  // A right-to-left page scrolls the other way: what lies past its LEFT edge is the overflow.
+  const rtlPage = cs(document.documentElement).direction === 'rtl';
+  const past = (r: DOMRect) => (rtlPage ? r.left < -1 : r.right > W + 1);
   const scrollWidth = document.documentElement.scrollWidth;
   const overflow: AuditFacts['overflow'] = [];
   if (scrollWidth > W + 1) {
@@ -124,11 +127,16 @@ export function auditProbe(): AuditFacts {
     for (const e of all) {
       if (!shown(e)) continue;
       const r = e.getBoundingClientRect();
-      if (r.right <= W + 1) continue;
+      if (!past(r)) continue;
       const p = e.parentElement;
-      if (p && p !== document.body && p.getBoundingClientRect().right > W + 1) continue;
+      if (p && p !== document.body && past(p.getBoundingClientRect())) continue;
       if (insideScroller(e)) continue;
-      overflow.push({ sel: path(e), right: Math.round(r.right), text: short(e.textContent ?? '', 40) });
+      // `right` is the far edge in the page's own direction: negative when past the left.
+      overflow.push({
+        sel: path(e),
+        right: Math.round(rtlPage ? r.left : r.right),
+        text: short(e.textContent ?? '', 40),
+      });
       if (overflow.length >= 12) break;
     }
   }
@@ -154,12 +162,15 @@ export function auditProbe(): AuditFacts {
       range.selectNodeContents(t);
       return range.getBoundingClientRect();
     };
+    // Right-to-left text overflows its box to the LEFT (that is the side scrollWidth counts).
+    const rtl = s.direction === 'rtl';
+    const overX = (r: DOMRect) => (rtl ? box.left - r.left : r.right - box.right);
     const victim = leaves.find((t) => {
       if (!e.contains(t)) return false;
       const r = textRect(t);
       return (
         (cutY && r.bottom > box.bottom + 2 && r.top < box.bottom) ||
-        (cutX && r.right > box.right + 2 && r.left < box.right)
+        (cutX && overX(r) > 2 && (rtl ? r.right > box.left : r.left < box.right))
       );
     });
     if (!victim) continue;
@@ -169,7 +180,8 @@ export function auditProbe(): AuditFacts {
       sel: path(e),
       text: short(ownText(victim), 40),
       axis,
-      by: Math.round(axis === 'y' ? r.bottom - box.bottom : r.right - box.right),
+      ...(axis === 'x' && rtl ? { side: 'left' as const } : {}),
+      by: Math.round(axis === 'y' ? r.bottom - box.bottom : overX(r)),
     });
     if (clipped.length >= 12) break;
   }
@@ -535,7 +547,18 @@ export function auditProbe(): AuditFacts {
       unknown(e, `${path(across.e)} is drawn across it`);
       continue;
     }
-    const d = drawn(e, pm(fill), first.left + first.width / 2, first.top + first.height / 2);
+    // Sample where the words are SEEN: text cut off by an overflow-clipping ancestor is
+    // measured on its visible part, not on the page behind the part that was hidden.
+    let [vl, vt, vr, vb] = [first.left, first.top, first.right, first.bottom];
+    for (let c: Element | null = e; c && c !== root; c = c.parentElement) {
+      const cc = cs(c);
+      if (cc.overflowX === 'visible' && cc.overflowY === 'visible') continue;
+      const r = c.getBoundingClientRect();
+      if (cc.overflowX !== 'visible') [vl, vr] = [Math.max(vl, r.left), Math.min(vr, r.right)];
+      if (cc.overflowY !== 'visible') [vt, vb] = [Math.max(vt, r.top), Math.min(vb, r.bottom)];
+    }
+    if (vr - vl < 1 || vb - vt < 1) continue;
+    const d = drawn(e, pm(fill), (vl + vr) / 2, (vt + vb) / 2);
     if (!d.fg || !d.bg) {
       unknown(e, d.why ?? 'unresolved');
       continue;

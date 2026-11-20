@@ -6,10 +6,13 @@ export interface AuditFacts {
   /** Filled by the renderer, not the page: script errors and requests that failed. */
   runtime?: { errors: string[]; failed: { url: string; status: number }[]; status?: number };
   scrollWidth: number;
-  /** Elements that first cross the right edge, when the page scrolls sideways. */
+  /**
+   * Elements that first cross the far edge, when the page scrolls sideways: the right edge,
+   * or on a right-to-left page the left one (`right` is then that left edge, negative).
+   */
   overflow: { sel: string; right: number; text: string }[];
-  /** Text cut off by a box that hides its overflow. */
-  clipped: { sel: string; text: string; axis: 'x' | 'y'; by: number }[];
+  /** Text cut off by a box that hides its overflow; `side: 'left'` for right-to-left text. */
+  clipped: { sel: string; text: string; axis: 'x' | 'y'; by: number; side?: 'left' }[];
   /** Two pieces of text drawn on top of each other. */
   overlaps: { a: string; b: string; text: string; other: string }[];
   /** Text in the first screen covered by something else (hit-testing its centre). */
