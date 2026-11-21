@@ -91,6 +91,30 @@ describe('parity', () => {
     expect(out(page({ controls: lm(3) }), page({ controls: lm(2) }))).toEqual(['error:lost']);
   });
 
+  it('fewer links to a page still linked is one note; a page no longer linked at all is lost', () => {
+    const link = (i: number, name: string, href: string) => ({
+      sel: `a${i}`,
+      role: 'link' as const,
+      name,
+      href,
+      visible: true,
+    });
+    const before = page({
+      controls: [
+        link(1, 'About', '/about'),
+        link(2, 'Our story', '/about'),
+        link(3, 'Mission', '/about'),
+        link(4, 'Who we are', '/about'),
+        link(5, 'Blog', '/blog'),
+      ],
+    });
+    const after = page({ controls: [link(1, 'About MAM', '/about')] });
+    expect(out(before, after).sort()).toEqual(['error:lost', 'info:changed', 'warn:renamed']);
+    const f = compareParity(before, after, 's').findings;
+    expect(f.find((x) => x.kind === 'lost')?.detail).toContain('/blog');
+    expect(f.some((x) => x.detail.startsWith('3 fewer links to'))).toBe(true);
+  });
+
   it('forms: the server reads NAMES, so a renamed field is lost, with the likely new name offered', () => {
     const f = page().forms[0] as AuditFacts['forms'][number];
     const r = compareParity(

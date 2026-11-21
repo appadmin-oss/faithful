@@ -18,6 +18,8 @@ export interface RunResult {
   pass: boolean;
   /** Lowest screen score, 0–100: a run is as good as its worst screen. */
   score: number;
+  /** The same before declared deviations were credited, when any were (rescore). */
+  measured?: number;
   mode: 'placed' | 'conformity' | 'audit' | 'parity';
   provenance: Provenance;
   /** Below 0.5 confidence, or conformity mode: the result is indicative. */
@@ -37,10 +39,13 @@ export function summarise(
   const counts = { error: 0, warn: 0, info: 0 };
   for (const f of findings) counts[f.severity]++;
   const score = screens.length ? Math.min(...screens.map((s) => s.score)) : 0;
+  const ms = screens.map((s) => (s as { measured?: number }).measured ?? s.score);
+  const measured = screens.length ? Math.min(...ms) : 0;
   return {
     v: 1,
     pass: screens.length > 0 && counts.error === 0 && score >= passScore,
     score,
+    ...(Math.floor(measured) !== Math.floor(score) ? { measured } : {}),
     mode,
     provenance,
     indicative: mode === 'conformity' || provenance.confidence < 0.5,
@@ -73,7 +78,10 @@ export function formatText(r: RunResult, max = 8, resultPath = '.faithful/last.j
   // as "FAIL 99/100" the two read as a contradiction, so the counts sit beside the verdict and
   // the similarity is named for what it is.
   const counts = c.error || c.warn ? `${c.error}E ${c.warn}W` : 'clean';
-  const match = r.mode === 'audit' || r.mode === 'parity' ? '' : ` · ${Math.floor(r.score)}% match`;
+  // Declared differences are credited (rescore); the measured figure stays beside it, so a
+  // ledger that grew to cover everything is visible in the one line everybody reads.
+  const measured = r.measured !== undefined ? ` (${Math.floor(r.measured)}% before declared deviations)` : '';
+  const match = r.mode === 'audit' || r.mode === 'parity' ? '' : ` · ${Math.floor(r.score)}% match${measured}`;
   const head = `faithful ${verdict} ${counts}${match}${notes} · ${r.mode}${r.indicative ? ' (indicative)' : ''} · ${r.provenance.format}`;
   // Errors and warnings are listed; notes (an overall offset, a fault the design has too) are
   // counted by kind in one line. A passing run with forty inherited notes is still two lines.

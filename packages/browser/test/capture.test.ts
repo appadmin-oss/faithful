@@ -30,6 +30,19 @@ describe('capture', () => {
     expect(h?.style?.lineHeight).toBe(40);
   });
 
+  it('reads only the words a reader is shown, not those of a hidden child', async () => {
+    const s = await r.capture(
+      {
+        html: page(
+          '<p>Progress saved<span hidden> · Start over</span><span style="display:none"> (draft)</span><span style="visibility:hidden"> x</span></p>',
+        ),
+      },
+      vp,
+      's',
+    );
+    expect(s.elements.filter((e) => e.kind === 'text').map((t) => t.text)).toEqual(['Progress saved']);
+  });
+
   it('reads a control once, by its label, and marks it interactive', async () => {
     const s = await r.capture(
       {

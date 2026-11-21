@@ -30,6 +30,8 @@ export interface MatchResult {
 
 /** Below this similarity two texts are not the same text, however close they sit. */
 export const TEXT_MIN_SIMILARITY = 0.5;
+/** Below this similarity, text more than a screen away is not the same text. */
+export const LOOSE_FAR_SIMILARITY = 0.8;
 /** Above this cost two boxes are not the same box. */
 export const BOX_MAX_COST = 0.6;
 /** Above this many candidates the O(n³) solver gives way to a greedy pass. */
@@ -167,7 +169,14 @@ export function matchElements(design: DesignElement[], build: DesignElement[], v
   const textCost = (d: DesignElement, b: DesignElement) => {
     const s = dice(d.text ?? '', b.text ?? '');
     if (s < TEXT_MIN_SIMILARITY) return FORBIDDEN;
-    return 1 - s + 0.3 * distance(d, b, diag);
+    const far = distance(d, b, diag);
+    /* Distance is capped at one screen diagonal, so a LOOSE likeness a whole page away cost
+       barely more than one beside it: a removed photo caption, "Photo — crash programme class",
+       was paired with a footer link reading "Crash Programme" five screens below and reported
+       as wrong copy, wrong size and wrong colour on a link that was right. A loose match more
+       than a screen away is two different texts; a close one (a moved section) still pairs. */
+    if (far >= 1 && s < LOOSE_FAR_SIMILARITY) return FORBIDDEN;
+    return 1 - s + 0.3 * far;
   };
   const t = pairUp(restD, restB, textCost, 1.3);
   pairs.push(...t.pairs);
@@ -183,11 +192,21 @@ export function matchElements(design: DesignElement[], build: DesignElement[], v
     const ad = d.box.w * d.box.h;
     const ab = b.box.w * b.box.h;
     const sizeSim = Math.max(ad, ab) > 0 ? Math.min(ad, ab) / Math.max(ad, ab) : 1;
+    /* A tie-break, never a reason: two boxes nested with the same geometry (a wrapper and the
+       section inside it) cost the same against either build box, so the pairing fell to array
+       order and could cross — the wrapper's fill reported as the section's and the section's
+       radius as the wrapper's, two errors on a correct build, appearing and vanishing between
+       runs. Sharing a fill and a radius settles the tie; it is too small to beat geometry. */
+    const same = (x?: string | number, y?: string | number) => (x ?? '') === (y ?? '');
+    const look =
+      (same(d.style?.background, b.style?.background) ? 0 : 0.006) +
+      (same(d.style?.radius, b.style?.radius) ? 0 : 0.004);
     return (
       0.4 * (1 - iou(d.box, b.box)) +
       0.25 * (d.kind === b.kind ? 0 : 1) +
       0.2 * Math.min(1, distance(d, b, diag) * 4) +
-      0.15 * (1 - sizeSim)
+      0.15 * (1 - sizeSim) +
+      look
     );
   };
   const x = pairUp(dB, bB, boxCost, BOX_MAX_COST);

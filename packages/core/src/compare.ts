@@ -26,6 +26,8 @@ export interface ScreenStats {
   matched: number;
   /** Area-weighted share of the design that found a counterpart. */
   coverage: number;
+  /** The area that share is of, so a declared deviation can be credited back (rescore). */
+  designArea?: number;
   position: Tally;
   text: Tally;
   color: Tally;
@@ -113,6 +115,25 @@ export function sameFace(asked: string, drawn: string): boolean {
 const within = (a: number, b: number, abs: number, pct = 0, of = 0): boolean =>
   Math.abs(a - b) <= Math.max(abs, pct * of);
 
+/**
+ * A page FRAME: a text-free box that covers the whole page (a design runtime's root wrapper,
+ * an app shell's outer div). It carries no decision a reviewer could act on, and it is the
+ * largest box on the screen, so when one side has it and the other does not, counting it
+ * as missing content cost a faithful build most of its coverage score — every page of a
+ * real Claude Design port sat near 80% for that reason alone. Paired frames still compare
+ * (their background is a real decision); an UNPAIRED one is ignored.
+ */
+export function isPageFrame(e: DesignElement, s: Screen): boolean {
+  if (!e.box || e.text) return false;
+  const pageW = s.viewport.width;
+  const pageH = Math.max(
+    s.pageHeight ?? 0,
+    s.viewport.height,
+    ...s.elements.map((x) => (x.box ? x.box.y + x.box.h : 0)),
+  );
+  return e.box.x <= 1 && e.box.y <= 1 && e.box.w >= pageW * 0.98 && e.box.h >= pageH * 0.9;
+}
+
 export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfig): ScreenResult {
   const T = cfg.tolerances;
   const vp = `${build.viewport.width}x${build.viewport.height}`;
@@ -136,7 +157,8 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
 
   // ---- Coverage ------------------------------------------------------------------------
   const weight = (e: DesignElement) => (e.box ? Math.max(area(e.box), 1) : 400);
-  const totalArea = design.elements.reduce((n, e) => n + weight(e), 0);
+  const frame = new Set(m.missing.filter((d) => isPageFrame(d, design)));
+  const totalArea = design.elements.reduce((n, e) => n + (frame.has(e) ? 0 : weight(e)), 0);
   const matchedArea =
     m.pairs.reduce((n, p) => n + weight(p.d), 0) +
     m.splits.reduce((n, s) => n + weight(s.d), 0) +
@@ -144,11 +166,11 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
   const coverage = totalArea ? Math.min(1, matchedArea / totalArea) : 1;
 
   for (const d of m.missing) {
-    if (!d.box && !d.text) continue;
+    if ((!d.box && !d.text) || frame.has(d)) continue;
     const sev: Severity = d.kind === 'box' ? 'warn' : 'error';
     add('missing', sev, `${d.kind}${d.text ? ` "${snippet(d.text, 40)}"` : ''} at ${fmtBox(d.box)}`, d);
   }
-  for (const b of m.extra)
+  for (const b of m.extra.filter((x) => !isPageFrame(x, build)))
     add('extra', 'warn', `${b.kind}${b.text ? ` "${snippet(b.text, 40)}"` : ''} at ${fmtBox(b.box)}`, undefined, b);
   for (const s of m.splits)
     add(
@@ -410,6 +432,7 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
     buildElements: build.elements.length,
     matched: m.pairs.length + m.splits.length,
     coverage,
+    designArea: totalArea,
     position,
     text,
     color,

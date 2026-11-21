@@ -25,6 +25,7 @@ import {
   type ReadContext,
   type RunResult,
   ratchet,
+  rescore,
   resolveConfig,
   type ScreenResult,
   type SourceInput,
@@ -511,5 +512,9 @@ export async function withDeviations(results: ScreenResult[], cwd = process.cwd(
     i += counts[k] as number;
   });
   if (results[0]) results[0].findings.push(...all.slice(i));
+  // A declared difference no longer costs score (rescore); the uncredited figure is kept.
+  results.forEach((r, k) => {
+    if (r.stats && 'position' in r.stats) results[k] = rescore(r);
+  });
   return results;
 }

@@ -63,6 +63,14 @@ describe('audit probe', () => {
     expect(f.filter((x) => x.kind === 'runtime')).toHaveLength(0);
   }, 90_000);
 
+  it('wrapped inline text beside its neighbour is not text drawn over text', async () => {
+    const html = `<!doctype html><html lang="en"><head><title>Prices</title><style>body{margin:24px;font:16px/1.5 sans-serif;color:#211a13}</style></head><body><main><h1>Prices</h1>
+      <p style="width:220px"><a href="/a">Ask about it when you apply</a>, or <a href="/b">apply for it at the centre</a>. Read <a href="/c">Pathways</a>.</p>
+      <table style="width:300px"><tr><th style="text-align:left;width:22%">Plan</th><th style="text-align:left;width:22%"><span style="font:600 30px/1.1 serif">Standard</span><br><span style="font:600 40px serif">$120</span><span style="font-size:14px"> from / term</span></th><th>x</th><th>y</th></tr></table></main></body></html>`;
+    const f = scoreAudit(await r.audit({ html }, { width: 1440, height: 900 }), 'audit@1440').findings;
+    expect(f.filter((x) => x.kind === 'overlap')).toEqual([]);
+  }, 60_000);
+
   it('the clean page has nothing to report', async () => {
     expect(await run('clean.html')).toEqual([]);
   }, 90_000);

@@ -148,6 +148,16 @@ export function auditProbe(): AuditFacts {
   // ── Text drawn on text, and text covered in the first screen ──────────────────────
   const solid = leaves.filter((e) => opacityOf(e) > 0.5).slice(0, 700);
   const rects = solid.map((e) => e.getBoundingClientRect());
+  /* Text is compared LINE BY LINE. An inline run that wraps has a bounding box spanning both
+     of its lines, so two neighbouring inline links on wrapped lines, or a 40px price beside
+     the small "/ term" that wraps under it, "overlapped" with no glyph touching another —
+     reported as an error on a page with nothing wrong. Each line box of the text is tested
+     instead; text genuinely drawn over text still intersects line for line. */
+  const lines = solid.map((e) => {
+    const range = document.createRange();
+    range.selectNodeContents(e);
+    return Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+  });
   const overlaps: AuditFacts['overlaps'] = [];
   for (let i = 0; i < solid.length && overlaps.length < 12; i++) {
     for (let j = i + 1; j < solid.length; j++) {
@@ -156,11 +166,21 @@ export function auditProbe(): AuditFacts {
       if (a.contains(b) || b.contains(a)) continue;
       const A = rects[i] as DOMRect,
         B = rects[j] as DOMRect;
-      const w = Math.min(A.right, B.right) - Math.max(A.left, B.left);
-      const h = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
-      if (w <= 0 || h <= 0) continue;
-      const small = Math.min(A.width * A.height, B.width * B.height);
-      if (w * h < 0.25 * small || w * h < 40) continue;
+      if (
+        Math.min(A.right, B.right) <= Math.max(A.left, B.left) ||
+        Math.min(A.bottom, B.bottom) <= Math.max(A.top, B.top)
+      )
+        continue;
+      const hit = (lines[i] as DOMRect[]).some((p) =>
+        (lines[j] as DOMRect[]).some((q) => {
+          const w = Math.min(p.right, q.right) - Math.max(p.left, q.left);
+          const h = Math.min(p.bottom, q.bottom) - Math.max(p.top, q.top);
+          if (w <= 0 || h <= 0) return false;
+          const small = Math.min(p.width * p.height, q.width * q.height);
+          return w * h >= 0.25 * small && w * h >= 40;
+        }),
+      );
+      if (!hit) continue;
       overlaps.push({ a: path(a), b: path(b), text: short(ownText(a), 30), other: short(ownText(b), 30) });
       break;
     }

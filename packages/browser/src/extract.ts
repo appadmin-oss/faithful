@@ -110,6 +110,20 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
     return Number.isFinite(n) ? n : undefined;
   };
   const transparent = (c: string) => !c || c === 'transparent' || /rgba?\([^)]*,\s*0\)$/.test(c) || /\/\s*0\)$/.test(c);
+  /* The text a reader is SHOWN: textContent also returns the words of a child that is
+     display:none, [hidden] or visibility:hidden — a closed "· Start over" link beside
+     "Progress saved" was read as part of the copy and reported as a copy change. */
+  const shownText = (n: Node): string => {
+    if (n.nodeType === 3) return n.textContent ?? '';
+    if (n.nodeType !== 1) return '';
+    const el = n as Element;
+    if ((el as HTMLElement).hidden) return '';
+    const c = getComputedStyle(el);
+    if (c.display === 'none' || c.visibility === 'hidden' || c.visibility === 'collapse') return '';
+    let out = '';
+    for (const k of Array.from(el.childNodes)) out += shownText(k);
+    return out;
+  };
   const ownText = (el: Element) =>
     Array.from(el.childNodes).some((n) => n.nodeType === 3 && (n.textContent ?? '').trim() !== '');
   const isBlock = (cs: CSSStyleDeclaration) => !/^inline/.test(cs.display) && cs.display !== 'contents';
@@ -278,7 +292,7 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
       if (!blockKids) {
         const range = document.createRange();
         range.selectNodeContents(el);
-        emit((el.textContent ?? '').replace(/\s+/g, ' ').trim(), range.getBoundingClientRect());
+        emit(shownText(el).replace(/\s+/g, ' ').trim(), range.getBoundingClientRect());
       } else if (ownText(el)) {
         // Mixed content — loose words beside block children ("Total <div>…</div> due"): the
         // loose words and their inline neighbours are a text of their own, boxed by their glyphs.
@@ -289,8 +303,8 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
           y2 = -Infinity;
         for (const n of Array.from(el.childNodes)) {
           const inline = n.nodeType === 3 || (n.nodeType === 1 && !isBlock(styleOf(n as Element)));
-          if (!inline || (n.textContent ?? '').trim() === '') continue;
-          parts.push((n.textContent ?? '').trim());
+          if (!inline || shownText(n).trim() === '') continue;
+          parts.push(shownText(n).trim());
           const range = document.createRange();
           range.selectNodeContents(n);
           const b = range.getBoundingClientRect();

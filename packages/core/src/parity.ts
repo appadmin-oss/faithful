@@ -136,10 +136,19 @@ export function compareParity(before: AuditFacts, after: AuditFacts, screen: str
 
   // Controls.
   const matches = matchControls(before.controls, after.controls, before.url, after.url);
+  /* Matching is one-to-one, so a redesign that links a page twice where the old one linked
+     it ten times "lost" eight links — eight errors about a destination every visitor can
+     still reach (a real redesign: 262 "lost" against 30 destinations actually gone). What a
+     user can no longer DO is reach a target; fewer routes to one they can still reach is a
+     note, counted once per target. */
+  const stillLinked = new Set(after.controls.map((c) => normHref(c.href, after.url)).filter(Boolean));
+  const fewer = new Map<string, number>();
   for (const m of matches) {
     const b = m.before;
     const what = `${b.role} "${b.name || '(unnamed)'}"${b.href ? ` → ${normHref(b.href, before.url) || b.href}` : ''}`;
-    if (m.how === 'lost') add('lost', 'error', `${what} is gone`, undefined, b.name);
+    const target = normHref(b.href, before.url);
+    if (m.how === 'lost' && target && stillLinked.has(target)) fewer.set(target, (fewer.get(target) ?? 0) + 1);
+    else if (m.how === 'lost') add('lost', 'error', `${what} is gone`, undefined, b.name);
     else if (m.how === 'name' && normHref(m.after?.href, after.url) !== normHref(b.href, before.url))
       add(
         'changed',
@@ -159,6 +168,8 @@ export function compareParity(before: AuditFacts, after: AuditFacts, screen: str
     if (m.after && b.visible && !m.after.visible)
       add('changed', 'info', `${b.role} "${b.name}" is now hidden until opened (a menu?)`, m.after.sel);
   }
+  for (const [t, n] of fewer)
+    add('changed', 'info', `${n} fewer link${n === 1 ? '' : 's'} to ${t}; it is still linked from the page`);
   const added = after.controls.length - matches.filter((m) => m.after).length;
   if (added > 0) add('changed', 'info', `${added} new control${added === 1 ? '' : 's'}`);
 

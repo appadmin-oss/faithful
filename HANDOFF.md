@@ -43,7 +43,30 @@ an identical copy, and rendered 24 real boards (20/24 page heights match the des
 report). `audit` caught every planted fault once, 0 on a clean page. `parity` caught 4/4
 planted losses, 0 on a full re-skin. Each check was also broken on purpose to see its test fail.
 
-**Not measured:** recall and false-alarm rate on real sites. Estimates — parity high; verify
+**Measured on a real build (21 Nov 2026).** Faithful was used to port and check a real
+six-page Claude Design handoff (MAM Academy, PHP; 5 content pages + a 10-screen application).
+- *verify, planted faults:* 18 realistic faults planted one at a time into the finished pages
+  (copy, case, colour ΔE 5 and 18, background, font family/size/weight, letter-spacing,
+  line-height, radius, a missing item, an extra badge, swapped rows, a 40px section shift, a
+  grid gap, a hidden badge, a shrunk target): **18/18 caught**, and a 2px nudge correctly not
+  reported. Three of the planter's own first attempts did not change the page (an
+  `aria-label`-only copy edit, a swap inside a hidden menu, a `margin-top` overridden by the
+  element's own `margin`); Faithful's silence on those was right.
+- *verify, false alarms on a correct build:* before this change every page scored ~80% with
+  nothing left to fix, and could never PASS. Causes, all fixed below: the design runtime's
+  page-sized root wrapper counted as missing content; declared deviations never credited;
+  nested equal boxes paired crosswise; a removed caption paired with a footer link five
+  screens away; text of `hidden` children read as copy. After: all six pages PASS, 94–99%
+  measured, 99–100% with declared deviations credited.
+- *parity:* on the old vs new site, 262 "lost" errors before the duplicate-link fix, 139 after.
+  The 139 are true per-page losses (an accessibility toolbar, a cookie notice, a slideshow, 16
+  deep links), so the remaining number is the signal, not noise. It cannot tell a dead form
+  (one posting to a page that ignores it) from a live one.
+- *audit:* one false "overlap" on wrapped inline text, fixed; the planted faults still found.
+- *Naming, not detection, is the weak spot:* swapped rows report as "position", letter-spacing
+  and line-height as "size", a hidden badge as 6 findings. Root-cause naming is the next work.
+
+**Not measured:** recall and false-alarm rate on many real sites. Estimates — parity high; verify
 medium-high; audit's mechanical faults medium-high; the slop score unknown (peer tools report
 5–10% false alarms, and audit has no contrast check yet).
 
@@ -69,6 +92,10 @@ read that shape. Confirmed against a public MIT-licensed sample (Solar-Analytics
 `docs/design/v3/boards/canvas.json`).
 
 ## Next, in order
+
+0. **Name the root cause** where detection is right but the label is not: letter-spacing and
+   line-height changes reported as `size`, swapped siblings as two `position`s, one hidden
+   element as several findings (see the MAM measurement above).
 
 The order is set by the gaps above: proof first, then reuse where a specialist is stronger,
 then breadth.
