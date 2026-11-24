@@ -32,6 +32,12 @@ export interface CaptureOptions {
   timeoutMs?: number;
   /** Ask the browser which font it actually drew each family with (slower; on by default). */
   fonts?: boolean;
+  /**
+   * Scroll the window this far down before reading it, so a state the page only reaches on
+   * scroll (a header that swaps once the hero has passed) is what is read. Positions stay in
+   * page coordinates, so a design and a build scrolled alike compare as at the top.
+   */
+  scrollY?: number;
 }
 
 const FREEZE = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}`;
@@ -147,6 +153,7 @@ export class Renderer {
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
       await this.settle(page, target, timeout);
+      if (opts.scrollY) await this.scrolled(page, target, opts.scrollY, timeout);
       const raw: RawPage = await within(
         inWorld<RawPage>(page, extractPage, { ignore: opts.ignore ?? [], max: opts.maxElements ?? 4000 }),
         timeout,
@@ -261,6 +268,23 @@ export class Renderer {
   }
 
   /** Freeze motion, wait for the page's own readiness, fonts and two frames; all bounded. */
+  /**
+   * Scroll to exactly `y` (a wheel keeps coasting past it) and give the page's scroll handlers
+   * and observers their frames: a header that slides in on scroll has done so when this returns.
+   */
+  private async scrolled(page: Page, target: RenderTarget, y: number, timeout: number): Promise<void> {
+    await within(
+      page.evaluate((to) => {
+        window.scrollTo(0, to);
+        window.dispatchEvent(new Event('scroll'));
+      }, y),
+      timeout,
+      'scrolling',
+    );
+    await page.waitForTimeout(250);
+    await this.settle(page, target, timeout);
+  }
+
   private async settle(page: Page, target: RenderTarget, timeout: number): Promise<void> {
     await within(page.addStyleTag({ content: FREEZE }), timeout, 'freezing animations').catch(unlessHung);
     if (target.readyWhen) await page.waitForFunction(target.readyWhen, undefined, { timeout }).catch(() => undefined);

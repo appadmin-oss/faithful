@@ -42,6 +42,10 @@ export interface AuditFacts {
     entries: { sel: string; name: string; href?: string; visible: boolean; current?: boolean; logo?: boolean }[];
     strip: number;
   }[];
+  /** Links that go nowhere: `#`, empty, `javascript:`, or `#id` with no such id. Optional for older facts. */
+  deadLinks?: { sel: string; name: string; href: string }[];
+  /** The document's own title and meta description. Optional for older facts. */
+  doc?: { title: string; description: string };
   /** Every form: where it sends, how, and the names the server will read. */
   forms: {
     sel: string;
@@ -91,6 +95,10 @@ export interface AuditFacts {
     glow: string[];
     emojiIcons: { sel: string; text: string }[];
     sideStripes: string[];
+    /** Boxes carrying three or more decorative layers at once (gradient, glow, blur, ring, ornament). */
+    stacked?: string[];
+    /** Labels directly above a heading that only repeat the heading's words. */
+    restated?: string[];
     nestedCards: string[];
     badgeAboveH1: string | null;
     iconTiles: number;

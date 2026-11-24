@@ -44,6 +44,12 @@ export interface FaithfulConfig {
   /** How many findings the compact report shows before "+N more". */
   maxFindings: number;
   guards: GuardConfig;
+  /**
+   * Every page the project verifies, so `faithful verify` with no arguments re-checks all of
+   * them after any change (MAM Academy, Nov 2026: a header changed by hand two days after the
+   * pages passed was never re-verified, and the design's header was lost).
+   */
+  checks: VerifyCheck[];
   audit: {
     /** Run axe-core's WCAG 2.2 A/AA rules in `faithful audit` (on by default). */
     axe: boolean;
@@ -53,6 +59,17 @@ export interface FaithfulConfig {
      */
     navMax: number;
   };
+}
+
+export interface VerifyCheck {
+  /** Shown in front of each screen: `home · home@1440`. Default: the build. */
+  name?: string;
+  design: string;
+  build: string;
+  viewports?: string;
+  screen?: string;
+  /** Scroll positions to compare at, as for `verify --scroll`: "0,900". */
+  scroll?: string;
 }
 
 export const DEFAULT_CONFIG: FaithfulConfig = {
@@ -86,6 +103,7 @@ export const DEFAULT_CONFIG: FaithfulConfig = {
       'inline-style': false,
     },
   },
+  checks: [],
   audit: { axe: true, navMax: 7 },
 };
 

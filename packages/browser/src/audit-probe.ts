@@ -396,6 +396,28 @@ export function auditProbe(): AuditFacts {
       if (!strip) strip = entries.filter((x) => x.visible).length;
       return { sel: path(nav), label: (nav.getAttribute('aria-label') ?? '').trim().slice(0, 60), entries, strip };
     });
+  /*
+   * Links that go nowhere: `#`, an empty href, `javascript:`, or `#id` with no such id on the
+   * page. A control that looks like a way forward and is not one; slop-detect and Hallmark both
+   * check it. Hidden ones count too: a menu that opens later opens onto them.
+   */
+  const deadLinks: NonNullable<AuditFacts['deadLinks']> = [];
+  for (const a of Array.from(document.querySelectorAll('a[href]'))) {
+    const href = (a.getAttribute('href') ?? '').trim();
+    const name = (nameOf(a) || (a.textContent ?? '')).replace(/\s+/g, ' ').trim().slice(0, 50);
+    let dead = href === '' || href === '#' || /^javascript:/i.test(href);
+    if (!dead && /^#[^/!]/.test(href)) {
+      const id = decodeURIComponent(href.slice(1));
+      dead = !document.getElementById(id) && !document.getElementsByName(id).length;
+    }
+    if (dead && deadLinks.length < 20) deadLinks.push({ sel: path(a), name, href });
+  }
+  const docMeta = {
+    title: document.title.trim().slice(0, 120),
+    description: (document.querySelector('meta[name="description"]')?.getAttribute('content') ?? '')
+      .trim()
+      .slice(0, 200),
+  };
   const labelOf = (el: Element) => {
     const id = el.getAttribute('id');
     const lab = (id && document.querySelector(`label[for="${CSS.escape(id)}"]`)) || el.closest('label');
@@ -741,8 +763,74 @@ export function auditProbe(): AuditFacts {
           e.getBoundingClientRect().height > 40)
       );
     })
+    // One callout with a coloured edge is a choice (a quote, an alert). The tell is the stripe
+    // repeated down a row of sibling cards: three or more under one parent.
+    .filter((e, _i, striped) => {
+      const p = e.parentElement;
+      return !!p && striped.filter((o) => o.parentElement === p).length >= 3;
+    })
     .slice(0, 8)
     .map(path);
+  /*
+   * Decoration stacked on one box (MengTo's "decorative stacking"): a gradient fill, a coloured
+   * glow, a frosted blur, a coloured ring and an ornamental ::before/::after each do the same
+   * job — "look special". One is a choice; three on one box is a box with nothing to say.
+   */
+  const stacked = all
+    .filter((e) => {
+      if (!shown(e)) return false;
+      const r = e.getBoundingClientRect();
+      if (r.width < 120 || r.height < 48) return false;
+      const s = cs(e) as unknown as Record<string, string>;
+      let n = 0;
+      if (/gradient/.test(s.backgroundImage ?? '')) n++;
+      const sh = s.boxShadow ?? 'none';
+      if (
+        sh !== 'none' &&
+        sh.split(/,(?![^(]*\))/).some((part) => {
+          const c = rgb(part);
+          return !!c && c.a > 0.15 && hsl(c).s > 0.4;
+        })
+      )
+        n++;
+      if (/blur/.test(`${s.backdropFilter ?? ''} ${s.webkitBackdropFilter ?? ''}`)) n++;
+      const bc = rgb(s.borderTopColor ?? '');
+      if (Number.parseFloat(s.borderTopWidth ?? '0') >= 1 && bc && bc.a > 0.2 && hsl(bc).s > 0.4) n++;
+      for (const pseudo of ['::before', '::after']) {
+        const ps = getComputedStyle(e, pseudo) as unknown as Record<string, string>;
+        if (
+          ps.content &&
+          ps.content !== 'none' &&
+          ps.content !== 'normal' &&
+          /gradient|blur/.test(`${ps.backgroundImage} ${ps.filter}`)
+        ) {
+          n++;
+          break;
+        }
+      }
+      return n >= 3;
+    })
+    .filter((e, _i, list) => !list.some((o) => o !== e && o.contains(e)))
+    .slice(0, 8)
+    .map(path);
+  /*
+   * A label above a heading that says what the heading says ("Features" over "Our features",
+   * "Pricing" over "Simple pricing"): copy that restates the copy next to it. A label that adds
+   * something ("New in 2.0", "Step 2") is not this.
+   */
+  const words = (t: string) =>
+    (t.toLowerCase().match(/\p{L}{3,}/gu) ?? []).filter((w) => !/^(the|and|for|our|your|with|you|are|new)$/.test(w));
+  const restated: string[] = [];
+  for (const hd of Array.from(document.querySelectorAll('h1,h2,h3'))) {
+    const prev = hd.previousElementSibling;
+    if (!prev || !shown(prev) || /^H[1-6]$/.test(prev.tagName)) continue;
+    const label = (prev.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (!label || label.length > 40 || prev.querySelector('a,button,img,svg')) continue;
+    const lw = words(label);
+    const hw = new Set(words(hd.textContent ?? ''));
+    if (lw.length && lw.every((w) => hw.has(w) || hw.has(w.replace(/s$/, '')) || hw.has(`${w}s`)))
+      restated.push(path(prev));
+  }
   const h1 = document.querySelector('h1');
   let badgeAboveH1: string | null = null;
   if (h1) {
@@ -815,6 +903,8 @@ export function auditProbe(): AuditFacts {
     targets,
     controls,
     navs,
+    deadLinks,
+    doc: docMeta,
     forms,
     landmarks,
     headings,
@@ -830,6 +920,8 @@ export function auditProbe(): AuditFacts {
       glow,
       emojiIcons,
       sideStripes,
+      stacked,
+      restated,
       nestedCards,
       badgeAboveH1,
       iconTiles,

@@ -1,3 +1,4 @@
+import type { DesignElement } from '@usefaithful/spec';
 import { describe, expect, it } from 'vitest';
 import { compareScreens, sameFace } from '../src/compare.js';
 import { DEFAULT_CONFIG } from '../src/config.js';
@@ -156,6 +157,40 @@ describe('compareScreens', () => {
 });
 
 describe('matchElements', () => {
+  // MAM Academy, Nov 2026: a footer taller by the links kept for parity carried its logo and
+  // social icons 400px down with every link around them.
+  const img = (id: string, x: number, y: number, w = 120, h = 40): DesignElement => ({
+    id,
+    kind: 'image',
+    box: { x, y, w, h },
+  });
+  const footer = (dy: number, logoDy = dy) => [
+    text('l1', 'About the academy', 40, 1000 + dy, 200, 24),
+    text('l2', 'Programmes and fees', 40, 1040 + dy, 200, 24),
+    text('l3', 'Safeguarding policy', 300, 1000 + dy, 200, 24),
+    img('logo', 40, 1100 + logoDy),
+    img('icon', 300, 1100 + logoDy, 24, 24),
+  ];
+
+  it('a box carried down with its neighbours is the same box, not missing here and extra there', () => {
+    const m = matchElements(footer(0), footer(400), { width: 1280, height: 800 });
+    expect(m.missing).toEqual([]);
+    expect(m.extra).toEqual([]);
+    expect(m.pairs.map((p) => `${p.d.id}-${p.b.id}`).sort()).toContain('logo-logo');
+    // In the comparison it moved WITH its neighbours: no position finding for it.
+    const r = compareScreens(screen(footer(0)), screen(footer(400)), cfg);
+    expect(r.findings.filter((f) => f.kind === 'missing' || f.kind === 'extra')).toEqual([]);
+  });
+
+  it('a box that did not travel with its neighbours, or was replaced by another kind, is still reported', () => {
+    // The logo is gone and a box of another kind sits where the shift would put it.
+    const b = footer(400)
+      .filter((e) => e.id !== 'logo')
+      .concat([{ id: 'vid', kind: 'video', box: { x: 40, y: 1500, w: 120, h: 40 } } as DesignElement]);
+    const m = matchElements(footer(0), b, { width: 1280, height: 800 });
+    expect(m.missing.map((e) => e.id)).toEqual(['logo']);
+  });
+
   it('pairs repeated labels by position, not first-come', () => {
     const d = [text('a', 'Edit', 100, 100, 40, 20), text('b', 'Edit', 100, 300, 40, 20)];
     const b = [text('B', 'Edit', 102, 302, 40, 20), text('A', 'Edit', 101, 101, 40, 20)];

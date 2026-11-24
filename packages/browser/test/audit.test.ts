@@ -478,3 +478,53 @@ nav{height:48px;overflow:hidden;white-space:nowrap}nav a{display:inline-block;pa
       expect((await pass(html, vp, s)).delta.findings, s).toEqual([]);
   }, 120_000);
 });
+
+describe('tells, measured with restraint (after MengTo)', () => {
+  const page = (body: string) =>
+    `<!doctype html><html lang="en"><head><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}
+.card{border-radius:8px;padding:16px;width:200px;height:80px;background:#f6f6f6}.stripe{border-left:4px solid #2563eb}
+.hero{width:400px;height:160px;border-radius:16px;background:linear-gradient(135deg,#7c3aed,#2563eb);box-shadow:0 0 40px rgba(124,58,237,.6);border:1px solid rgba(37,99,235,.8)}
+.eyebrow{font-size:12px}</style></head><body><main>${body}</main></body></html>`;
+  const slop = async (body: string) =>
+    (await r.audit({ html: page(body), baseDir: FIX }, { width: 1440, height: 900 }, {})).slop;
+
+  it('a stripe down a row of three cards is a tell; one callout with a coloured edge is not', async () => {
+    const row = await slop(
+      '<h1>Plans</h1><div><div class="card stripe">A</div><div class="card stripe">B</div><div class="card stripe">C</div></div>',
+    );
+    expect(row.sideStripes).toHaveLength(3);
+    const one = await slop(
+      '<h1>Plans</h1><div><div class="card stripe">Note: bins go out on Tuesday.</div><div class="card">B</div></div>',
+    );
+    expect(one.sideStripes).toEqual([]);
+  }, 60_000);
+
+  it('three decorative layers on one box are stacked; one gradient alone is not', async () => {
+    expect(await slop('<h1>Plans</h1><div class="hero">Start</div>').then((x) => x.stacked)).toHaveLength(1);
+    expect(
+      await slop(
+        '<h1>Plans</h1><div style="width:400px;height:160px;background:linear-gradient(#fff,#eee)">Start</div>',
+      ).then((x) => x.stacked),
+    ).toEqual([]);
+  }, 60_000);
+
+  it('a label that only repeats its heading is restated; one that adds something is not', async () => {
+    expect(await slop('<p class="eyebrow">Features</p><h2>Our features</h2>').then((x) => x.restated)).toHaveLength(1);
+    expect(await slop('<p class="eyebrow">New in 2.0</p><h2>Our features</h2>').then((x) => x.restated)).toEqual([]);
+    // Sharing a word is not repeating: "teams" says something the heading does not.
+    expect(
+      await slop('<p class="eyebrow">Features for teams</p><h2>Our features</h2>').then((x) => x.restated),
+    ).toEqual([]);
+  }, 60_000);
+});
+
+describe('dead links and the document title, measured', () => {
+  it('#, javascript: and a #id with no such id are dead; a skip link to a real id is not', async () => {
+    const html = `<!doctype html><html lang="en"><head><title>Plots · Hackney Growers</title></head><body>
+<a href="#main">Skip to content</a><a href="#">Read more</a><a href="javascript:void(0)">Open</a><a href="#faq">FAQ</a><a href="/apply">Apply</a>
+<main id="main"><h1>Plots</h1></main></body></html>`;
+    const f = await r.audit({ html, baseDir: FIX }, { width: 1440, height: 900 }, {});
+    expect(f.deadLinks?.map((d) => d.href)).toEqual(['#', 'javascript:void(0)', '#faq']);
+    expect(f.doc).toEqual({ title: 'Plots · Hackney Growers', description: '' });
+  }, 60_000);
+});

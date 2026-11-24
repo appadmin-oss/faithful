@@ -227,13 +227,41 @@ export function matchElements(design: DesignElement[], build: DesignElement[], v
   };
   const x = pairUp(dB, bB, boxCost, BOX_MAX_COST);
 
+  // 5. A box carried along by its neighbours (MAM Academy, Nov 2026): a taller footer moved
+  //    the logo and the social icons 400px down with every link around them, and they read as
+  //    missing in one place and extra in another. Whatever is left is tried again where its
+  //    nearest paired neighbours say it went — the median of their moves — and must still be
+  //    the same kind and size. A box that moved on its own is not excused here: it pairs, and
+  //    the comparison reports its position against those same neighbours.
+  const anchors = [...pairs, ...x.pairs].filter((p) => p.d.box && p.b.box);
+  const carried = (d: DesignElement) => {
+    if (!d.box || !anchors.length) return null;
+    const cy = centre(d.box).y;
+    const near = [...anchors]
+      .sort((a, b) => Math.abs(centre(a.d.box as never).y - cy) - Math.abs(centre(b.d.box as never).y - cy))
+      .slice(0, 5);
+    const med = (xs: number[]) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)] as number;
+    const dy = med(near.map((p) => (p.b.box?.y ?? 0) - (p.d.box?.y ?? 0)));
+    const dx = med(near.map((p) => (p.b.box?.x ?? 0) - (p.d.box?.x ?? 0)));
+    return { ...d, box: { ...d.box, x: d.box.x + dx, y: d.box.y + dy } };
+  };
+  const moved = new Map<DesignElement, DesignElement>();
+  for (const d of x.restD) {
+    const c = carried(d);
+    if (c && (c.box?.x !== d.box?.x || c.box?.y !== d.box?.y)) moved.set(c, d);
+  }
+  const y = pairUp([...moved.keys()], x.restB, (c, b) => (c.kind === b.kind ? boxCost(c, b) : FORBIDDEN), BOX_MAX_COST);
+  const second = y.pairs.map((p) => ({ ...p, d: moved.get(p.d) as DesignElement }));
+  const secondD = new Set(second.map((p) => p.d));
+  const secondB = new Set(second.map((p) => p.b));
+
   return {
-    pairs: [...pairs, ...x.pairs],
+    pairs: [...pairs, ...x.pairs, ...second],
     splits,
     merges,
-    missing: [...textMissing, ...x.restD],
+    missing: [...textMissing, ...x.restD.filter((d) => !secondD.has(d))],
     // Extra boxes are not reported: a build adds wrappers a design never draws. Extra text,
     // images and controls are.
-    extra: [...textExtra, ...x.restB.filter((b) => b.kind !== 'box')],
+    extra: [...textExtra, ...x.restB.filter((b) => b.kind !== 'box' && !secondB.has(b))],
   };
 }

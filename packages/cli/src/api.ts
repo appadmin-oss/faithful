@@ -148,6 +148,8 @@ export class Session {
   constructor(
     readonly config: FaithfulConfig,
     readonly colorScheme: ColorScheme = 'light',
+    /** `verify --scroll`: every page this session reads, design and build alike, is scrolled this far. */
+    readonly scrollY = 0,
   ) {}
 
   browser(): Promise<Renderer> {
@@ -159,7 +161,11 @@ export class Session {
     return {
       viewports,
       render: async (target, vp, id) =>
-        (await this.browser()).capture(target, vp, id, { ignore: this.config.ignore, colorScheme: this.colorScheme }),
+        (await this.browser()).capture(target, vp, id, {
+          ignore: this.config.ignore,
+          colorScheme: this.colorScheme,
+          ...(this.scrollY ? { scrollY: this.scrollY } : {}),
+        }),
       readFile: (p) => readFile(p, 'utf8'),
       exists: async (p) => existsSync(p),
       warn: (m) => this.warnings.push(m),
@@ -213,8 +219,28 @@ export interface VerifyOptions {
   colorScheme?: string;
   /** Compare only this screen (a canvas board, a Figma frame): its id, as `outline` lists it. */
   screen?: string;
+  /**
+   * `--scroll 0,900`: compare at each scroll position, design and build scrolled alike, so a
+   * state reached by scrolling (a header that swaps after the hero) is checked too. Default 0.
+   */
+  scroll?: string | readonly number[];
   config?: FaithfulConfig;
   cwd?: string;
+}
+
+/** `--scroll`: whole pixel offsets, comma-separated, each ≥ 0; anything else is a bad call. */
+export function parseScroll(s: string | readonly number[] | undefined): number[] {
+  if (s === undefined) return [0];
+  const raw = typeof s === 'string' ? s.split(',').map((x) => x.trim()) : s.map(String);
+  const out: number[] = [];
+  for (const x of raw) {
+    if (!/^\d{1,6}$/.test(x))
+      throw new FaithfulError(
+        `--scroll takes pixel offsets like 0,900; got "${typeof s === 'string' ? s : s.join(',')}"`,
+      );
+    if (!out.includes(Number(x))) out.push(Number(x));
+  }
+  return out.length ? out : [0];
 }
 
 /** A screen's board: `home@1440` and `home@390` are one board at two viewports. */
@@ -256,6 +282,75 @@ export function pickScreens<T extends { id: string }>(
  * Extra sources add conformity checks to a placed run.
  */
 export async function verify(o: VerifyOptions): Promise<RunResult> {
+  const cfg = o.config ?? (await loadConfig(o.cwd));
+  const c = await collect({ ...o, config: cfg });
+  await withDeviations(c.results, o.cwd);
+  const run = summarise(c.results, c.provenance, c.mode, cfg.passScore);
+  await save(run, o.cwd);
+  return run;
+}
+
+/**
+ * `faithful verify` with no design: every page in the config's `checks`, in one run and one
+ * verdict, each screen named by its check. A check that cannot run is a bad call naming it.
+ */
+export async function verifyChecks(o: { config?: FaithfulConfig; cwd?: string } = {}): Promise<RunResult> {
+  const cfg = o.config ?? (await loadConfig(o.cwd));
+  if (!cfg.checks.length)
+    throw new FaithfulError(
+      'nothing to verify: name a design (`faithful verify <design> --build <url>`), or list the pages in faithful.config.json "checks"',
+    );
+  const results: ScreenResult[] = [];
+  let first: Awaited<ReturnType<typeof collect>> | undefined;
+  for (const [i, ch] of cfg.checks.entries()) {
+    if (typeof ch?.design !== 'string' || typeof ch?.build !== 'string')
+      throw new FaithfulError(`faithful.config.json checks[${i}] needs a "design" and a "build"`);
+    const name = ch.name ?? ch.build;
+    const c = await collect({
+      design: ch.design,
+      build: ch.build,
+      config: cfg,
+      ...(o.cwd ? { cwd: o.cwd } : {}),
+      ...(ch.viewports ? { viewports: ch.viewports } : {}),
+      ...(ch.screen ? { screen: ch.screen } : {}),
+      ...(ch.scroll ? { scroll: ch.scroll } : {}),
+    });
+    first ??= c;
+    for (const r of c.results) {
+      r.screen = `${name} · ${r.screen}`;
+      for (const f of r.findings) f.screen = r.screen;
+    }
+    results.push(...c.results);
+  }
+  const done = first as NonNullable<typeof first>;
+  await withDeviations(results, o.cwd);
+  const run = summarise(results, done.provenance, done.mode, cfg.passScore);
+  await save(run, o.cwd);
+  return run;
+}
+
+/** Every scroll position of one verification, its screens labelled by position. */
+async function collect(o: VerifyOptions & { config: FaithfulConfig }) {
+  const scrolls = parseScroll(o.scroll);
+  const results: ScreenResult[] = [];
+  let first: Awaited<ReturnType<typeof compareAt>> | undefined;
+  for (const y of scrolls) {
+    const at = await compareAt(o, y);
+    first ??= at;
+    // A scrolled state is its own screen in the report: `home@1440 scrolled 900`.
+    if (y)
+      for (const r of at.results) {
+        r.screen = `${r.screen} scrolled ${y}`;
+        for (const f of r.findings) f.screen = r.screen;
+      }
+    results.push(...at.results);
+  }
+  const done = first as NonNullable<typeof first>;
+  return { results, provenance: done.provenance, mode: done.mode };
+}
+
+/** One verification at one scroll position: the design and the build read and compared. */
+async function compareAt(o: VerifyOptions, scrollY: number) {
   o = {
     ...o,
     design: localPath(o.design),
@@ -264,7 +359,7 @@ export async function verify(o: VerifyOptions): Promise<RunResult> {
   };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const [scheme] = parseColorScheme(o.colorScheme);
-  const session = new Session(cfg, scheme);
+  const session = new Session(cfg, scheme, scrollY);
   // Every path is read against the caller's folder, as audit and parity read theirs: an MCP
   // server started elsewhere must not compare some other design.html.
   const cwd = o.cwd ?? process.cwd();
@@ -319,10 +414,11 @@ export async function verify(o: VerifyOptions): Promise<RunResult> {
         results.push(checkConformity(merged, bs, cfg, `conformity@${vp.width}`));
       }
     }
-    await withDeviations(results, o.cwd);
-    const run = summarise(results, design.provenance, placed.length ? 'placed' : 'conformity', cfg.passScore);
-    await save(run, o.cwd);
-    return run;
+    return {
+      results,
+      provenance: design.provenance,
+      mode: placed.length ? ('placed' as const) : ('conformity' as const),
+    };
   } finally {
     await session.close();
   }

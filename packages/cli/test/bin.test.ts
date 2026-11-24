@@ -182,3 +182,60 @@ describe('faithful parity (bin) with a deviations file', () => {
     expect(run(d, 'parity', '--before', 'before.html', '--after', 'after.html').code).toBe(2);
   }, 120_000);
 });
+
+describe('behaviour on scroll (MAM Academy, Nov 2026)', () => {
+  // The design's header: over the hero only the wordmark and two buttons; once the hero has
+  // scrolled past, the full bar slides in. `full` builds both states; `stuck` gets the top
+  // right and never brings the bar in.
+  const header = (swaps: boolean) => `<!doctype html><html lang="en"><head><title>Academy</title><style>
+body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}
+#top{position:fixed;top:0;left:0;right:0;height:56px;display:flex;gap:24px;align-items:center;padding:0 24px;background:#fbf7ef}
+#bar{position:fixed;top:0;left:0;right:0;height:64px;display:none;gap:24px;align-items:center;padding:0 24px;background:#10292c;color:#fbf7ef}
+#bar a{color:#fbf7ef}.hero{height:900px;padding:120px 24px 0}.more{height:1400px;padding:24px}</style></head><body>
+<div id="top"><b>Academy</b><a href="/menu">Menu</a><a href="/apply">Apply</a></div>
+<nav id="bar"><b>Academy</b><a href="/programmes">Programmes</a><a href="/about">About</a><a href="/life">Life</a></nav>
+<section class="hero"><h1>Where musicians become complete artists</h1></section><section class="more"><p>Lessons every week.</p></section>
+<script>${swaps ? "addEventListener('scroll',()=>{const past=scrollY>600;document.getElementById('bar').style.display=past?'flex':'none';document.getElementById('top').style.display=past?'none':'flex'});" : ''}</script>
+</body></html>`;
+
+  it('a header that never changes passes at the top and fails once scrolled; the right one passes both', () => {
+    const d = tmp();
+    writeFileSync(join(d, 'design.html'), header(true));
+    writeFileSync(join(d, 'full.html'), header(true));
+    writeFileSync(join(d, 'stuck.html'), header(false));
+    const vp = ['--viewports', '1280x800'];
+    // The trap: at the top the two are the same page.
+    expect(run(d, 'verify', 'design.html', '--build', 'stuck.html', ...vp).code).toBe(0);
+    const scrolled = run(d, 'verify', 'design.html', '--build', 'stuck.html', ...vp, '--scroll', '0,900');
+    expect(scrolled.code).toBe(1);
+    expect(scrolled.out).toMatch(/missing: control "Programmes" at 112,9\d\d /);
+    const last = JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8'));
+    expect(last.screens.map((s: { screen: string }) => s.screen)).toEqual(['design@1280', 'design@1280 scrolled 900']);
+    expect(run(d, 'verify', 'design.html', '--build', 'full.html', ...vp, '--scroll', '0,900').code).toBe(0);
+    expect(run(d, 'verify', 'design.html', '--build', 'full.html', '--scroll', '0,-5').code).toBe(2);
+  }, 180_000);
+
+  it('`faithful verify` with no design re-checks every page in "checks", in one verdict', () => {
+    const d = tmp();
+    writeFileSync(join(d, 'design.html'), header(true));
+    writeFileSync(join(d, 'full.html'), header(true));
+    writeFileSync(join(d, 'stuck.html'), header(false));
+    const checks = (build: string) =>
+      writeFileSync(
+        join(d, 'faithful.config.json'),
+        JSON.stringify({
+          checks: [{ name: 'home', design: 'design.html', build, viewports: '1280x800', scroll: '0,900' }],
+        }),
+      );
+    checks('full.html');
+    expect(run(d, 'verify').code).toBe(0);
+    checks('stuck.html');
+    const r = run(d, 'verify');
+    expect(r.code).toBe(1);
+    expect(
+      JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8')).screens.map((s: { screen: string }) => s.screen),
+    ).toEqual(['home · design@1280', 'home · design@1280 scrolled 900']);
+    writeFileSync(join(d, 'faithful.config.json'), JSON.stringify({ checks: [] }));
+    expect(run(d, 'verify').code).toBe(2);
+  }, 180_000);
+});

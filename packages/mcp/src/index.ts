@@ -71,6 +71,12 @@ export function createServer(cwd = process.cwd()): McpServer {
           .string()
           .optional()
           .describe('Compare only this screen id (a canvas board); required when the design has several'),
+        scroll: z
+          .array(z.number().int().min(0).max(999999))
+          .optional()
+          .describe(
+            'Scroll positions to compare at, design and build alike, e.g. [0, 900] for a header that changes after the hero',
+          ),
       }),
       outputSchema: z
         .object({
@@ -83,7 +89,7 @@ export function createServer(cwd = process.cwd()): McpServer {
         .passthrough(),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ design, build, viewports, also, max, colorScheme, screen }) =>
+    async ({ design, build, viewports, also, max, colorScheme, screen, scroll }) =>
       guarded(async () => {
         const run = await verify({
           design,
@@ -94,6 +100,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           ...(also?.length ? { also } : {}),
           ...(colorScheme ? { colorScheme } : {}),
           ...(screen ? { screen } : {}),
+          ...(scroll?.length ? { scroll } : {}),
         });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),

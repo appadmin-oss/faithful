@@ -37,7 +37,16 @@ const UNRENDERED = /^(undefined|null|NaN|\[object Object\]|Invalid Date)$|\{\{\s
 const LOREM = /\blorem ipsum\b|\bdolor sit amet\b|\bconsectetur adipiscing\b/i;
 const DUMMY = /\b(John|Jane) Doe\b|\bfoo@(bar|example)\.|\b(user|test|your)@example\.com\b|\b123 (Main|Fake) St/i;
 const PLACEHOLDER_HOSTS =
-  /\b(via\.placeholder\.com|placehold\.(co|it)|placekitten\.com|dummyimage\.com|picsum\.photos|fakeimg\.pl|placeimg\.com)\b/i;
+  /\b(via\.placeholder\.com|placehold\.(co|it)|placekitten\.com|dummyimage\.com|picsum\.photos|fakeimg\.pl|placeimg\.com|i\.pravatar\.cc|randomuser\.me|ui-avatars\.com|api\.dicebear\.com|robohash\.org)\b/i;
+/**
+ * Words an agent leaves in the interface when it meant to come back: notes to itself, the
+ * stand-in company, a fictional phone number. Each is a fault on a page somebody will read.
+ */
+const AGENT_LEFTOVERS =
+  /\b(TODO|FIXME|TBD)\b|\b[Mm]ock(ed)? data\b|\([Rr]eplace (this|with)\b|\b[Rr]eplace (this|me) with\b|\bYour (Company|Brand|Logo|Name Here)\b|\bAcme (Inc|Corp)\b|\b555[-. ]01\d\d\b|\bplaceholder text\b|\bsample (data|content) only\b/;
+/** Titles a scaffold ships with, never meant to reach a reader's tab. */
+const SCAFFOLD_TITLES =
+  /^(React App|Vite \+ React( \+ TS)?|Vite App|Create Next App|Next\.js App|Svelte(Kit)? app|Vue App|Angular App|Document|Untitled|index\.html?)$/i;
 /** Copy that could sit on any product's homepage. Counted, never flagged one at a time. */
 const GENERIC = [
   /\belevate your\b/i,
@@ -126,6 +135,25 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
       add('placeholder', 'error', `an unrendered value is on the page: "${s.slice(0, 40)}"`, t.sel);
     else if (LOREM.test(s)) add('placeholder', 'error', `placeholder text: "${s.slice(0, 40)}"`, t.sel);
     else if (DUMMY.test(s)) add('placeholder', 'warn', `dummy data: "${s.slice(0, 40)}"`, t.sel);
+  }
+  const leftover = f.texts.find((t) => AGENT_LEFTOVERS.test(t.text) && !UNRENDERED.test(t.text.trim()));
+  if (leftover)
+    add('placeholder', 'error', `text left for later is on the page: "${leftover.text.slice(0, 50)}"`, leftover.sel);
+  if (f.doc) {
+    if (!f.doc.title)
+      add('placeholder', 'warn', 'the page has no <title>: its tab, bookmark and search result are blank');
+    else if (SCAFFOLD_TITLES.test(f.doc.title))
+      add('placeholder', 'warn', `the page title is a scaffold's default ("${f.doc.title}")`);
+  }
+  const dead = f.deadLinks ?? [];
+  if (dead.length) {
+    const first = dead[0] as NonNullable<AuditFacts['deadLinks']>[number];
+    add(
+      'dead',
+      'warn',
+      `${dead.length} link${dead.length === 1 ? '' : 's'} go${dead.length === 1 ? 'es' : ''} nowhere (${first.href ? `href="${first.href}"` : 'empty href'}${first.name ? `: "${first.name}"` : ''})`,
+      first.sel,
+    );
   }
   const placeholderImgs = f.imageSrcs.filter((u) => PLACEHOLDER_HOSTS.test(u));
   if (placeholderImgs.length)
@@ -273,15 +301,23 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   navLogic(f, o.navMax ?? 7, add);
 
   // ── Tells ─────────────────────────────────────────────────────────────────────────
+  /*
+   * Restraint, after MengTo's audit-ai-design-slop: never reject a technique in isolation. A
+   * gradient, a glow, a card is somewhere a choice, so a strong tell is only a WARNING when
+   * another tell is on the page with it; alone it is a note. What a tell IS is decided in the
+   * probe with the same care: a stripe counts only down a row of cards, decoration only when
+   * three layers are stacked on one box, a label only when it repeats its heading.
+   */
   const s = f.slop;
   const tells: string[] = [];
   let strongTells = 0;
-  const tell = (name: string, n: number, sel?: string, strong = true) => {
+  const strong: { name: string; n: number; sel?: string }[] = [];
+  const tell = (name: string, n: number, sel?: string, isStrong = true) => {
     if (!n) return;
     tells.push(name);
-    if (strong) {
+    if (isStrong) {
       strongTells++;
-      add('slop', 'warn', `${name}${n > 1 ? ` ×${n}` : ''}`, sel);
+      strong.push({ name, n, ...(sel ? { sel } : {}) });
     }
   };
   tell('gradient text', s.gradientText.length, s.gradientText[0]);
@@ -289,6 +325,8 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   tell('emoji used as icons', s.emojiIcons.length, s.emojiIcons[0]?.sel);
   tell('coloured stripe down one side of a box', s.sideStripes.length, s.sideStripes[0]);
   tell('cards nested in cards', s.nestedCards.length, s.nestedCards[0]);
+  tell('decoration stacked on one box (gradient, glow, glass, ring)', s.stacked?.length ?? 0, s.stacked?.[0]);
+  tell('a label above a heading that repeats it', s.restated?.length ?? 0, s.restated?.[0]);
   if (s.glass.length > 2) tell('frosted-glass panels', s.glass.length, s.glass[0]);
   if (s.badgeAboveH1) tell('a pill badge above the headline', 1, s.badgeAboveH1);
   const generic = f.texts.filter((t) => GENERIC.some((g) => g.test(t.text)));
@@ -302,6 +340,13 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   const centred = f.paragraphs.filter((p) => p.centred).length;
   if (f.paragraphs.length >= 5 && centred / f.paragraphs.length > 0.6)
     tell('almost every paragraph centred', centred, undefined, false);
+  for (const t of strong)
+    add(
+      'slop',
+      tells.length >= 2 ? 'warn' : 'info',
+      `${t.name}${t.n > 1 ? ` ×${t.n}` : ''}${tells.length >= 2 ? '' : ': alone, a choice; noted, not counted against the page'}`,
+      t.sel,
+    );
   // A purple brand set in Inter with a row of cards is a legitimate design: weak tells alone
   // never make the summary. It needs at least one strong tell to be about generated UI at all.
   if (tells.length >= 3 && strongTells >= 1) {

@@ -79,8 +79,11 @@ describe('scoreAudit', () => {
     expect(kinds(f)).toEqual(['error:broken']);
   });
 
-  it('ONE tell is a warning and never decides the verdict; many together are an error', () => {
-    expect(kinds(clean({}, { gradientText: ['h1'] }))).toEqual(['warn:slop']);
+  it('ONE tell alone is a note (a technique is a choice); with another it is a warning; many together are an error', () => {
+    expect(kinds(clean({}, { gradientText: ['h1'] }))).toEqual(['info:slop']);
+    expect(scoreAudit(clean({}, { gradientText: ['h1'] }), 's').findings[0]?.detail).toMatch(/alone, a choice/);
+    // A weak tell beside it is enough company: the strong one is then a warning.
+    expect(kinds(clean({}, { gradientText: ['h1'], fonts: ['inter'] }))).toEqual(['warn:slop']);
     const many = clean(
       {
         paragraphs: Array.from({ length: 6 }, () => ({
@@ -105,6 +108,17 @@ describe('scoreAudit', () => {
     const summary = r.findings.find((x) => x.detail.startsWith('reads as generated'));
     expect(summary?.severity).toBe('error');
     expect(summary?.detail).toMatch(/^reads as generated: 7 known tells/);
+  });
+
+  it('decoration stacked on one box and a label that repeats its heading are tells', () => {
+    expect(
+      scoreAudit(clean({}, { stacked: ['.hero-card'], restated: ['.eyebrow'] }), 's').findings.map((x) => x.detail),
+    ).toEqual([
+      'decoration stacked on one box (gradient, glow, glass, ring)',
+      'a label above a heading that repeats it',
+    ]);
+    // Facts measured before these existed have neither, and nothing is judged.
+    expect(kinds(clean({}, { stacked: [], restated: [] }))).toEqual([]);
   });
 
   it('weak tells alone — a purple brand, Inter, a card row — are not reported at all', () => {
@@ -495,5 +509,46 @@ describe('navigation logic (MAM Academy, Nov 2026)', () => {
         }),
       ),
     ).toEqual(['info:heading']);
+  });
+});
+
+describe('what a scaffold or an agent leaves behind (after slop-detect and Hallmark)', () => {
+  it('notes left for later, a stand-in company and a fictional number are errors; ordinary words are not', () => {
+    for (const t of [
+      'TODO: real pricing',
+      'Mock data until the API lands',
+      'Call 555-0134',
+      '(replace with your logo)',
+      'Your Company Ltd',
+    ])
+      expect(kinds(clean({ texts: [{ sel: 'p', text: t }] })), t).toEqual(['error:placeholder']);
+    for (const t of ['Today we open at nine', 'A todo list for your garden', 'Call 0803 555 1234'])
+      expect(kinds(clean({ texts: [{ sel: 'p', text: t }] })), t).toEqual([]);
+  });
+
+  it('a missing or scaffold title is reported; a real one is not; older facts without it are not judged', () => {
+    expect(kinds(clean({ doc: { title: 'Vite + React + TS', description: '' } }))).toEqual(['warn:placeholder']);
+    expect(kinds(clean({ doc: { title: '', description: '' } }))).toEqual(['warn:placeholder']);
+    expect(kinds(clean({ doc: { title: 'Twelve plots free · Hackney Growers', description: '' } }))).toEqual([]);
+    expect(kinds(clean())).toEqual([]);
+  });
+
+  it('links that go nowhere are one finding with the count and the first', () => {
+    const r = scoreAudit(
+      clean({
+        deadLinks: [
+          { sel: 'a.more', name: 'Read more', href: '#' },
+          { sel: 'a.faq', name: 'FAQ', href: '#faq' },
+        ],
+      }),
+      's',
+    );
+    expect(r.findings.map((x) => `${x.severity}:${x.kind}:${x.detail}`)).toEqual([
+      'warn:dead:2 links go nowhere (href="#": "Read more")',
+    ]);
+  });
+
+  it('placeholder avatars are placeholder images', () => {
+    expect(kinds(clean({ imageSrcs: ['https://i.pravatar.cc/150?img=3'] }))).toEqual(['warn:placeholder']);
   });
 });

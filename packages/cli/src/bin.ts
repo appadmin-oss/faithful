@@ -32,12 +32,14 @@ import {
   readDesign,
   Session,
   verify,
+  verifyChecks,
 } from './api.js';
 import { init } from './init.js';
 
 const HELP = `faithful — prove a build matches its design
 
-  faithful verify <design> --build <url|file> [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+  faithful verify                          every page in faithful.config.json "checks", one verdict
+  faithful verify <design> --build <url|file> [--scroll 0,900] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
   faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design: layout faults, contrast, WCAG (axe-core), readability, AI-slop tells
       [--stress zoom,reflow,expand,rtl,spacing|none]  extra passes: text at 200%, 320px wide (both by default),
                                            text 1.3–2× longer, right-to-left, WCAG text spacing
@@ -72,6 +74,7 @@ async function main(argv: string[]): Promise<number> {
       'color-scheme': { type: 'string' },
       stress: { type: 'string' },
       screen: { type: 'string' },
+      scroll: { type: 'string' },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
       max: { type: 'string', default: '' },
@@ -93,12 +96,21 @@ async function main(argv: string[]): Promise<number> {
   switch (cmd) {
     case 'verify': {
       const design = pos[0];
+      if (!design && !v.build) {
+        // No design: every page listed in faithful.config.json "checks".
+        const run = await verifyChecks({ config: cfg });
+        console.log(
+          v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
+        );
+        return run.pass ? 0 : 1;
+      }
       if (!design || !v.build) throw new FaithfulError('usage: faithful verify <design> --build <url|file>');
       const opts: Parameters<typeof verify>[0] = { design, build: v.build, config: cfg };
       if (v.viewports) opts.viewports = v.viewports;
       if (v.also?.length) opts.also = v.also;
       if (v['color-scheme'] !== undefined) opts.colorScheme = v['color-scheme'];
       if (v.screen !== undefined) opts.screen = v.screen;
+      if (v.scroll !== undefined) opts.scroll = v.scroll;
       const run = await verify(opts);
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
