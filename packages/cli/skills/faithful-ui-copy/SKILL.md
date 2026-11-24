@@ -38,5 +38,5 @@ When implementing a design, its strings are final: a wrong-looking string is a q
 an edit. When improving copy in a redesign, record renamed controls in
 `faithful.deviations.json` so the change is reviewed.
 
-Check with `npx @faithful/cli audit <page>`: its `wording` findings catch vague links, generic
+Check with `npx @usefaithful/cli audit <page>`: its `wording` findings catch vague links, generic
 buttons, two names for one action, mixed heading case and doubled words.

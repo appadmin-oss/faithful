@@ -48,10 +48,11 @@ describe('faithful (bin)', () => {
     );
     expect(run(d, 'audit', 'theme.html', '--viewports', '800x600').code).toBe(0);
     expect(run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'light').code).toBe(0);
+    // With the default zoom and reflow passes each scheme has three screens; these assertions are about schemes.
     const dark = run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'dark');
     expect(dark.code).toBe(1);
     expect(dark.out).toMatch(/E contrast: "Readable only in the light theme\." #111111 on #151515/);
-    const both = run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'both');
+    const both = run(d, 'audit', 'theme.html', '--viewports', '800x600', '--color-scheme', 'both', '--stress', 'none');
     expect(both.code).toBe(1);
     const last = JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8'));
     expect(last.screens.map((s: { screen: string }) => s.screen)).toEqual(['audit@800 light', 'audit@800 dark']);
@@ -76,7 +77,7 @@ describe('faithful (bin)', () => {
       join(d, 'i18n.html'),
       '<!doctype html><html lang="en"><head><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}.save{width:96px;white-space:nowrap;overflow:hidden;padding:12px 0;background:#1d4ed8;color:#fff;border:0;font:16px Georgia}</style></head><body><main><p>Your changes are kept for a week.</p><button class="save">Save draft</button></main></body></html>',
     );
-    expect(run(d, 'audit', 'i18n.html', '--viewports', '375x812').code).toBe(0);
+    expect(run(d, 'audit', 'i18n.html', '--viewports', '375x812', '--stress', 'none').code).toBe(0);
     const r = run(
       d,
       'audit',
@@ -107,9 +108,9 @@ describe('faithful (bin)', () => {
     );
     const refused = run(d, 'audit', 'ltr.html', '--viewports', '800x600', '--stress', 'rtl');
     expect(refused.out).toMatch(/W unmeasured: the rtl pass could not be applied/);
-    const bad = run(d, 'audit', 'i18n.html', '--stress', 'expand,zoom');
+    const bad = run(d, 'audit', 'i18n.html', '--stress', 'expand,huge');
     expect(bad.code).toBe(2);
-    expect(bad.err).toMatch(/--stress takes a comma list of expand, rtl, spacing; got "expand,zoom"/);
+    expect(bad.err).toMatch(/--stress takes a comma list of expand, rtl, spacing, zoom, reflow; got "expand,huge"/);
   }, 180_000);
 
   it('axe-core: a fault only axe sees fails the audit; --no-axe or audit.axe: false skips it and says so', () => {

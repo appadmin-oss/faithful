@@ -1,5 +1,5 @@
 {
-  "name": "@faithful/core",
+  "name": "@usefaithful/core",
   "version": "0.1.0",
   "description": "Faithful's engine: element matching, measurement, colour, findings, scoring and the source guards. No runtime dependencies.",
   "license": "Apache-2.0",
@@ -8,5 +8,5 @@
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
   "files": ["dist", "README.md"],
   "repository": { "type": "git", "url": "git+https://github.com/appadmin-oss/faithful.git", "directory": "packages/core" },
-  "dependencies": { "@faithful/spec": "workspace:*" }
+  "dependencies": { "@usefaithful/spec": "workspace:*" }
 }

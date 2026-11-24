@@ -1,4 +1,4 @@
-import type { Provenance } from '@faithful/spec';
+import type { Provenance } from '@usefaithful/spec';
 import { describe, expect, it } from 'vitest';
 import { scoreAudit } from '../src/audit.js';
 import { compareScreens } from '../src/compare.js';

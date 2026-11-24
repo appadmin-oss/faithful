@@ -1,4 +1,4 @@
-import type { Adapter } from '@faithful/core';
+import type { Adapter } from '@usefaithful/core';
 import { canvasAdapter } from './canvas.js';
 import { dcHtmlAdapter } from './dc-html.js';
 import { designSystemAdapter } from './design-system.js';

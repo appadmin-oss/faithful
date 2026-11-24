@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
-import { compareParity } from '@faithful/core';
+import { compareParity } from '@usefaithful/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Renderer } from '../src/index.js';
 

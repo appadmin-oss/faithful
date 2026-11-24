@@ -46,8 +46,8 @@ half of all home pages have unlabelled inputs (WebAIM Million 2026).
 ## Prove it
 
 ```
-npx @faithful/cli audit <form-url>
-npx @faithful/cli parity --before <old-url> --after <new-url>
+npx @usefaithful/cli audit <form-url>
+npx @usefaithful/cli parity --before <old-url> --after <new-url>
 ```
 
 `audit` flags small targets, clipped labels and error text, unreadable sizes and wording,

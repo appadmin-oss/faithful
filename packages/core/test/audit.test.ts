@@ -410,3 +410,90 @@ describe('stressDelta (audit --stress)', () => {
     expect(scoreAudit(clean({ clipped: [cut('.a')] }), 's').findings[0]?.detail).toMatch(/\(right edge of its box\)/);
   });
 });
+
+describe('navigation logic (MAM Academy, Nov 2026)', () => {
+  type Entry = NonNullable<AuditFacts['navs']>[number]['entries'][number];
+  const e = (name: string, href: string, x: Partial<Entry> = {}): Entry => ({
+    sel: `a[href="${href}"]`,
+    name,
+    href,
+    visible: true,
+    ...x,
+  });
+  const nav = (entries: Entry[], strip = entries.length, label = '') => ({ sel: 'nav', label, entries, strip });
+  const page = (navs: NonNullable<AuditFacts['navs']>, over: Partial<AuditFacts> = {}) =>
+    clean({ url: 'http://x.test/portal/marking', navs, ...over });
+  const nav7 = scoreAudit;
+
+  it('one screen listed under two names is reported once, naming both', () => {
+    const f = page([
+      nav([e('Marking', '/portal/marking'), e('Learn', '/portal/learn')]),
+      nav([e('Grade entry', '/portal/marking/')], 1, 'More'),
+    ]);
+    const r = scoreAudit(f, 's').findings.filter((x) => x.kind === 'navigation');
+    expect(r.map((x) => x.severity)).toEqual(['warn']);
+    expect(r[0]?.detail).toMatch(/2 names \("Marking", "Grade entry"\)/);
+  });
+
+  it('the same name twice (a header and a phone menu), a logo and a badge count are not duplicates', () => {
+    const f = page(
+      [
+        nav([
+          e('MAM Academy', '/portal/marking', { logo: true }),
+          e('Marking', '/portal/marking', { current: true }),
+          e('Learn', '/learn'),
+        ]),
+        nav([e('Marking 3', '/portal/marking'), e('Learn', '/learn#top')], 2, 'Phone'),
+      ],
+      { headings: [{ sel: 'h1', level: 1, text: 'Marking' }] },
+    );
+    expect(kinds(f)).toEqual([]);
+  });
+
+  it('the entry for this page and its heading must say the same thing', () => {
+    const f = page([nav([e('Grade entry', '/portal/marking', { current: true }), e('Learn', '/learn')])], {
+      headings: [{ sel: 'h1', level: 1, text: 'Marking and grades for this term' }],
+    });
+    expect(scoreAudit(f, 's').findings.map((x) => x.detail)).toEqual([
+      'the menu calls this page "Grade entry" but its heading says "Marking and grades for this term": use one name',
+    ]);
+    // Without aria-current, the entry that links to this very address is the page's.
+    const g = page([nav([e('Grade entry', '/portal/marking'), e('Learn', '/learn')])], {
+      headings: [{ sel: 'h1', level: 1, text: 'Marking' }],
+    });
+    expect(kinds(g)).toEqual(['warn:navigation']);
+    // A heading that contains the entry's name is the same name, said more fully.
+    const h = page([nav([e('Invoices', '/portal/marking', { current: true })])], {
+      headings: [{ sel: 'h1', level: 1, text: 'All invoices' }],
+    });
+    expect(kinds(h)).toEqual([]);
+  });
+
+  it('a strip wider than the site keeps it is reported, at the configured width', () => {
+    const many = Array.from({ length: 7 }, (_, i) => e(`Section ${String.fromCharCode(65 + i)}`, `/s${i}`));
+    expect(kinds(page([nav(many, 7, 'Finance')]))).toEqual([]);
+    expect(nav7(page([nav(many, 7, 'Finance')]), 's', { navMax: 6 }).findings.map((x) => x.detail)).toEqual([
+      'the "Finance" menu lists 7 entries in one strip (more than 6): group or move some',
+    ]);
+  });
+
+  it('one name going to two places inside one menu is reported', () => {
+    expect(kinds(page([nav([e('Reports', '/reports/term'), e('Reports', '/reports/fees')])]))).toEqual([
+      'warn:navigation',
+    ]);
+  });
+
+  it('a page whose title is an h2 has no h1; a skipped level is a note', () => {
+    expect(kinds(clean({ headings: [{ sel: 'h2', level: 2, text: 'Invoices' }] }))).toEqual(['warn:heading']);
+    expect(
+      kinds(
+        clean({
+          headings: [
+            { sel: 'h1', level: 1, text: 'Invoices' },
+            { sel: 'h3', level: 3, text: 'Overdue' },
+          ],
+        }),
+      ),
+    ).toEqual(['info:heading']);
+  });
+});

@@ -13,15 +13,15 @@ copy, and every control still works. Tests passing is not that proof.
 1. Build and serve the CURRENT version and keep it running (another port or a saved build).
    That is BEFORE. Note the pages that matter.
 2. Run the check once against itself to know it is clean:
-   `npx @faithful/cli verify <before-url> --build <before-url>`.
+   `npx @usefaithful/cli verify <before-url> --build <before-url>`.
 
 ## One step at a time
 
 Change one thing (one package, one config, one codemod) and after EVERY step run, per page:
 
 ```
-npx @faithful/cli verify http://localhost:4000/pricing --build http://localhost:3000/pricing --viewports 390x844,1440x900
-npx @faithful/cli parity --before http://localhost:4000 --after http://localhost:3000
+npx @usefaithful/cli verify http://localhost:4000/pricing --build http://localhost:3000/pricing --viewports 390x844,1440x900
+npx @usefaithful/cli parity --before http://localhost:4000 --after http://localhost:3000
 ```
 
 `verify` treats BEFORE as the design: any moved, resized, recoloured or reworded element is a

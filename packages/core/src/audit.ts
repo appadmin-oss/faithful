@@ -1,7 +1,7 @@
 /**
  * `faithful audit`: judge a rendered page on its own, with no design to compare against.
  *
- * The page is measured by @faithful/browser (`AuditFacts`); every judgement is made here, so
+ * The page is measured by @usefaithful/browser (`AuditFacts`); every judgement is made here, so
  * each threshold is testable without a browser. Two kinds of rule, kept apart on purpose:
  *
  *   faults  something a user cannot get past — text cut off or drawn over text, a page that
@@ -28,6 +28,8 @@ export interface AuditOptions {
   minTarget?: number;
   /** Tells together at which the page reads as generated (an error). */
   slopError?: number;
+  /** Most entries in one strip of a menu before it is reported (config `audit.navMax`, default 7). */
+  navMax?: number;
 }
 
 /** Words that stand in for a value: printed only when the code meant to fill them failed. */
@@ -267,6 +269,9 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
       shouty[0]?.sel,
     );
 
+  // ── Navigation and structure: the menu's LOGIC, which no amount of looking at pixels finds ──
+  navLogic(f, o.navMax ?? 7, add);
+
   // ── Tells ─────────────────────────────────────────────────────────────────────────
   const s = f.slop;
   const tells: string[] = [];
@@ -459,6 +464,130 @@ function axeFindings(
   }
 }
 
+/** A menu entry's name as a reader compares it: case, spacing, badges and counts aside. */
+const navName = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/\s+\d+\+?$/, '')
+    .replace(/[^\p{L}\p{N}&]+/gu, ' ')
+    .trim();
+
+/**
+ * Where a menu entry goes, as one string: path and hash route, resolved against the page;
+ * query strings kept apart only when they name the screen (`?tab=`, `?page=`, `?view=`).
+ * '' for entries that go nowhere comparable (`#`, `javascript:`, mail, the site root).
+ */
+function navDest(href: string | undefined, base: string): string {
+  if (!href || (/^(#|javascript:|mailto:|tel:)/i.test(href.trim()) && !/^#[/!]?\w/.test(href.trim()))) return '';
+  try {
+    const u = new URL(href, base || 'http://x/');
+    if (!/^(https?|file):$/.test(u.protocol)) return '';
+    const path = u.pathname.replace(/\/(index\.\w+)?$/, '') || '/';
+    const screen = [...u.searchParams].filter(([k]) => /^(tab|page|view|screen|section)$/i.test(k));
+    const dest = `${u.host}${path}${screen.length ? `?${screen.map(([k, v]) => `${k}=${v}`).join('&')}` : ''}${u.hash}`;
+    return path === '/' && !u.hash && !screen.length ? '' : dest;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The navigation's logic (MAM Academy, Nov 2026: a portal listed Marking and "Grade entry" for
+ * one screen; six console screens were titled differently from the entry that opened them; two
+ * menu groups had drifted past the site's own six; every console title was an h2). Each of
+ * these is invisible in a screenshot and costs the reader the question "are these the same?".
+ */
+function navLogic(f: AuditFacts, navMax: number, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
+  const navs = f.navs ?? [];
+  const entries = navs.flatMap((n) => n.entries.filter((e) => !e.logo && navName(e.name)));
+  // One destination, two names.
+  const byDest = new Map<string, { names: Map<string, string>; sel: string }>();
+  for (const e of entries) {
+    const d = navDest(e.href, f.url);
+    if (!d) continue;
+    const g = byDest.get(d) ?? { names: new Map<string, string>(), sel: e.sel };
+    if (!g.names.has(navName(e.name))) g.names.set(navName(e.name), e.name);
+    byDest.set(d, g);
+  }
+  let twice = 0;
+  for (const [, g] of byDest) {
+    if (g.names.size < 2 || twice >= 3) continue;
+    twice++;
+    add(
+      'navigation',
+      'warn',
+      `one screen is in the menu under ${g.names.size} names ("${[...g.names.values()].join('", "')}"): readers think they are different places`,
+      g.sel,
+    );
+  }
+  // One name, two destinations, inside one menu.
+  for (const n of navs) {
+    const byName = new Map<string, Set<string>>();
+    for (const e of n.entries) {
+      const d = navDest(e.href, f.url);
+      if (!d || e.logo || !navName(e.name)) continue;
+      byName.set(navName(e.name), (byName.get(navName(e.name)) ?? new Set()).add(d));
+    }
+    const clash = [...byName].find(([, ds]) => ds.size > 1);
+    if (clash)
+      add(
+        'navigation',
+        'warn',
+        `"${clash[0]}" goes to ${clash[1].size} different places in one menu: name each for where it goes`,
+        n.sel,
+      );
+  }
+  // The entry for this page says one thing, the page's heading another.
+  const h1 = f.headings.find((h) => h.level === 1);
+  if (h1) {
+    const here = navDest(f.url, f.url);
+    const current = entries.filter((e) => e.current);
+    const mine = current.length ? current : here ? entries.filter((e) => navDest(e.href, f.url) === here) : [];
+    const names = [...new Set(mine.map((e) => e.name))];
+    const a = navName(h1.text);
+    if (names.length === 1 && a) {
+      const b = navName(names[0] as string);
+      if (b && a !== b && !a.includes(b) && !b.includes(a))
+        add(
+          'navigation',
+          'warn',
+          `the menu calls this page "${names[0]}" but its heading says "${h1.text.slice(0, 60)}": use one name`,
+          h1.sel,
+        );
+    }
+  }
+  // A strip of the menu wider than the site keeps it.
+  for (const n of navs)
+    if (n.strip > navMax)
+      add(
+        'navigation',
+        'warn',
+        `${n.label ? `the "${n.label}" menu` : 'a menu'} lists ${n.strip} entries in one strip (more than ${navMax}): group or move some`,
+        n.sel,
+      );
+  // Structure: a page names itself with one h1; skipped levels lose the outline.
+  if (f.headings.length && !h1)
+    add(
+      'heading',
+      'warn',
+      `the page has no h1: its title "${f.headings[0]?.text.slice(0, 50)}" is an h${f.headings[0]?.level}`,
+      f.headings[0]?.sel,
+    );
+  for (let i = 1; i < f.headings.length; i++) {
+    const prev = f.headings[i - 1]?.level ?? 1;
+    const cur = f.headings[i]?.level ?? 1;
+    if (cur > prev + 1) {
+      add(
+        'heading',
+        'info',
+        `heading levels skip from h${prev} to h${cur} at "${f.headings[i]?.text.slice(0, 40)}"`,
+        f.headings[i]?.sel,
+      );
+      break;
+    }
+  }
+}
+
 /**
  * One finding per fault, not one per viewport: the same clipped label at a phone and a desktop
  * width is one thing to fix. Where the "reads as generated" summary differs between widths,
@@ -501,6 +630,8 @@ export const STRESS_CAUSE = {
   expand: 'with text 1.3–2× longer, as in translation',
   rtl: 'in right-to-left',
   spacing: 'with WCAG 1.4.12 text spacing',
+  zoom: 'with text at 200% (WCAG 1.4.4)',
+  reflow: 'at 320px wide (WCAG 1.4.10 reflow)',
 } as const;
 export type StressMode = keyof typeof STRESS_CAUSE;
 

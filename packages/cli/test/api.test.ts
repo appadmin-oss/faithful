@@ -6,8 +6,8 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { compareScreens, DEFAULT_CONFIG, formatText, summarise } from '@faithful/core';
-import type { DesignElement, Provenance, Screen } from '@faithful/spec';
+import { compareScreens, DEFAULT_CONFIG, formatText, summarise } from '@usefaithful/core';
+import type { DesignElement, Provenance, Screen } from '@usefaithful/spec';
 import { describe, expect, it } from 'vitest';
 import {
   audit,
@@ -65,13 +65,14 @@ describe('--color-scheme', () => {
 });
 
 describe('--stress', () => {
-  it('a comma list (CLI) or an array (MCP) of expand, rtl, spacing; anything else is a bad call', () => {
-    expect(parseStress(undefined)).toEqual([]);
+  it('a comma list (CLI) or an array (MCP); enlarged text and 320px reflow unless told otherwise; anything else is a bad call', () => {
+    expect(parseStress(undefined)).toEqual(['zoom', 'reflow']);
+    expect(parseStress('none')).toEqual([]);
     expect(parseStress('expand,RTL, spacing,rtl')).toEqual(['expand', 'rtl', 'spacing']);
-    expect(parseStress(['spacing'])).toEqual(['spacing']);
-    for (const bad of ['', 'expand,', 'ltr', 'expand,zoom'])
-      expect(() => parseStress(bad), bad).toThrow(/--stress takes a comma list of expand, rtl, spacing/);
-    expect(() => parseStress(['rtl', 'zoom'])).toThrow(FaithfulError);
+    expect(parseStress(['spacing', 'zoom'])).toEqual(['spacing', 'zoom']);
+    for (const bad of ['', 'expand,', 'ltr', 'expand,huge'])
+      expect(() => parseStress(bad), bad).toThrow(/--stress takes a comma list of expand, rtl, spacing, zoom, reflow/);
+    expect(() => parseStress(['rtl', 'huge'])).toThrow(FaithfulError);
   });
 });
 

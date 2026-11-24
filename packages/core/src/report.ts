@@ -7,7 +7,7 @@
  * Measured, not assumed: `test/report.test.ts` holds the compact report of a 40-finding run
  * under a token ceiling, so a "helpful" extra field cannot quietly triple every call.
  */
-import type { Provenance } from '@faithful/spec';
+import type { Provenance } from '@usefaithful/spec';
 import type { ScreenResult } from './compare.js';
 import { type Finding, KINDS, sortFindings } from './findings.js';
 import { fmtBox } from './geometry.js';

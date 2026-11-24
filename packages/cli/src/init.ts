@@ -8,7 +8,7 @@
  *                                    itself (Vercel's evals: skills were not invoked in 56%
  *                                    of cases; a short AGENTS.md pointer was followed)
  *
- * Every command is spelled `npx @faithful/cli`, never `npx faithful`: the unscoped name on npm
+ * Every command is spelled `npx @usefaithful/cli`, never `npx faithful`: the unscoped name on npm
  * is somebody else's package, so in a project without Faithful installed the short form
  * downloads and runs a stranger's code.
  *
@@ -20,7 +20,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_CONFIG } from '@faithful/core';
+import { DEFAULT_CONFIG } from '@usefaithful/core';
 
 /**
  * The skills Faithful ships, read from `packages/cli/skills/<name>/SKILL.md` — the one copy,
@@ -38,10 +38,10 @@ export const SKILL = SKILLS.faithful as string;
 
 export const AGENTS_BLOCK = `<!-- faithful:begin -->
 ## Design fidelity (Faithful)
-- Building UI from a design: run \`npx @faithful/cli outline <design>\` first, then \`npx @faithful/cli verify <design> --build <url>\` after each screen until it prints PASS; paste that line as proof.
-- Before committing UI: \`npx @faithful/cli guard\`. Never loosen faithful.config.json or faithful.baseline.json to pass.
-- Refactoring or redesigning working UI: \`npx @faithful/cli parity --before <old> --after <new>\` after every step; nothing may be lost.
-- Upgrades meant to change nothing (Tailwind, React, a UI library): \`npx @faithful/cli verify <old-url> --build <new-url>\` per page; every difference is a finding.
+- Building UI from a design: run \`npx @usefaithful/cli outline <design>\` first, then \`npx @usefaithful/cli verify <design> --build <url>\` after each screen until it prints PASS; paste that line as proof.
+- Before committing UI: \`npx @usefaithful/cli guard\`. Never loosen faithful.config.json or faithful.baseline.json to pass.
+- Refactoring or redesigning working UI: \`npx @usefaithful/cli parity --before <old> --after <new>\` after every step; nothing may be lost.
+- Upgrades meant to change nothing (Tailwind, React, a UI library): \`npx @usefaithful/cli verify <old-url> --build <new-url>\` per page; every difference is a finding.
 - Skills in .agents/skills/ — read the one that fits before starting: faithful-implement-design (build from a design), faithful-ui-quality (no design), faithful-ui-states (loading/empty/error), faithful-responsive (mobile, every width), faithful-accessible-forms (forms, keyboard, a11y), faithful-dark-mode (dark theme, contrast), faithful-i18n (translation, RTL, text spacing), faithful-data-display (dashboards, tables), faithful-design-tokens (use the design system), faithful-no-visual-change (upgrades, migrations), faithful-safe-redesign (refactor/redesign), faithful-ui-copy (wording), faithful-design-handoff (design agents).
 <!-- faithful:end -->`;
 

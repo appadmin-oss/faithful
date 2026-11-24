@@ -7,7 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import type { AxeRule } from '@faithful/core';
+import type { AxeRule } from '@usefaithful/core';
 
 export const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] as const;
 

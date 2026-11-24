@@ -11,7 +11,7 @@ Never "improve" by taste.
 
 ## Before writing UI
 
-1. `npx @faithful/cli outline <design>` — screens, copy, palette and type scale in a few lines.
+1. `npx @usefaithful/cli outline <design>` — screens, copy, palette and type scale in a few lines.
    A Claude Design canvas (`project/canvas.json`) lists one screen per board, by id.
 2. Read the whole handoff (README, notes, chats). States, permissions and edge cases are
    written there, not drawn: empty, loading, error, offline, signed out.
@@ -35,7 +35,7 @@ a value the tokens lack means you misread the design: look again, then ask.
 Then verify, at the design's own size, and fix before moving on — drift compounds:
 
 ```
-npx @faithful/cli verify <design> --build <url-or-file> [--screen <id>]
+npx @usefaithful/cli verify <design> --build <url-or-file> [--screen <id>]
 ```
 
 A design of several boards (a canvas) is several pages: name the one this build is with

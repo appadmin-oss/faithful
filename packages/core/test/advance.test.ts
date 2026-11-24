@@ -4,7 +4,7 @@
  * deviations ledger: what a team meant to change, with a reason, an owner and an expiry.
  */
 
-import type { Provenance } from '@faithful/spec';
+import type { Provenance } from '@usefaithful/spec';
 import { describe, expect, it } from 'vitest';
 import { compareScreens, improvedContrast, rescoreDeclared } from '../src/compare.js';
 import { DEFAULT_CONFIG } from '../src/config.js';

@@ -41,13 +41,13 @@ Controls have states too: hover, focus-visible, active, disabled, busy, selected
 Run the audit on EVERY state URL, at phone and desktop width:
 
 ```
-npx @faithful/cli audit "http://localhost:3000/orders?state=empty"
-npx @faithful/cli audit "http://localhost:3000/orders?state=error"
+npx @usefaithful/cli audit "http://localhost:3000/orders?state=empty"
+npx @usefaithful/cli audit "http://localhost:3000/orders?state=error"
 ```
 
 It catches clipped and overlapping text, sideways scroll, unrendered values, placeholder data
 and broken images in that state. If the design has a board per state, also run
-`npx @faithful/cli verify <design> --build <state-url>` for each.
+`npx @usefaithful/cli verify <design> --build <state-url>` for each.
 
 ## Report
 

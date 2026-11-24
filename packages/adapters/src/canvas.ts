@@ -17,9 +17,9 @@
  * format is never misread as this one.
  */
 import { dirname, join } from 'node:path';
-import type { Adapter, ReadContext, SourceInput } from '@faithful/core';
-import type { Screen, Tier } from '@faithful/spec';
-import { SpecError } from '@faithful/spec';
+import type { Adapter, ReadContext, SourceInput } from '@usefaithful/core';
+import type { Screen, Tier } from '@usefaithful/spec';
+import { SpecError } from '@usefaithful/spec';
 import { dcHtmlAdapter } from './dc-html.js';
 import { htmlAdapter } from './html.js';
 import { provenance, screenId, spec } from './util.js';

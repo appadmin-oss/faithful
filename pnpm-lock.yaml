@@ -26,22 +26,22 @@ importers:
 
   packages/adapters:
     dependencies:
-      '@faithful/browser':
+      '@usefaithful/browser':
         specifier: workspace:*
         version: link:../browser
-      '@faithful/core':
+      '@usefaithful/core':
         specifier: workspace:*
         version: link:../core
-      '@faithful/spec':
+      '@usefaithful/spec':
         specifier: workspace:*
         version: link:../spec
 
   packages/browser:
     dependencies:
-      '@faithful/core':
+      '@usefaithful/core':
         specifier: workspace:*
         version: link:../core
-      '@faithful/spec':
+      '@usefaithful/spec':
         specifier: workspace:*
         version: link:../spec
       axe-core:
@@ -53,36 +53,36 @@ importers:
 
   packages/cli:
     dependencies:
-      '@faithful/adapters':
+      '@usefaithful/adapters':
         specifier: workspace:*
         version: link:../adapters
-      '@faithful/browser':
+      '@usefaithful/browser':
         specifier: workspace:*
         version: link:../browser
-      '@faithful/core':
+      '@usefaithful/core':
         specifier: workspace:*
         version: link:../core
-      '@faithful/spec':
+      '@usefaithful/spec':
         specifier: workspace:*
         version: link:../spec
 
   packages/core:
     dependencies:
-      '@faithful/spec':
+      '@usefaithful/spec':
         specifier: workspace:*
         version: link:../spec
 
   packages/mcp:
     dependencies:
-      '@faithful/cli':
-        specifier: workspace:*
-        version: link:../cli
-      '@faithful/core':
-        specifier: workspace:*
-        version: link:../core
       '@modelcontextprotocol/server':
         specifier: ^2.4.0
         version: 2.4.0
+      '@usefaithful/cli':
+        specifier: workspace:*
+        version: link:../cli
+      '@usefaithful/core':
+        specifier: workspace:*
+        version: link:../core
       zod:
         specifier: ^4.6.7
         version: 4.6.7

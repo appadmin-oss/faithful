@@ -1,5 +1,5 @@
 {
-  "name": "@faithful/adapters",
+  "name": "@usefaithful/adapters",
   "version": "0.1.0",
   "description": "Faithful's built-in readers: HTML and JSX prototypes, Claude Design .dc.html, Figma JSON, DTCG and CSS tokens, DESIGN.md, images.",
   "license": "Apache-2.0",
@@ -8,5 +8,5 @@
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
   "files": ["dist", "README.md"],
   "repository": { "type": "git", "url": "git+https://github.com/appadmin-oss/faithful.git", "directory": "packages/adapters" },
-  "dependencies": { "@faithful/spec": "workspace:*", "@faithful/core": "workspace:*", "@faithful/browser": "workspace:*" }
+  "dependencies": { "@usefaithful/spec": "workspace:*", "@usefaithful/core": "workspace:*", "@usefaithful/browser": "workspace:*" }
 }

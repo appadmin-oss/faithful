@@ -8,10 +8,10 @@
  * than placement; an image without a sidecar spec has no elements, so its confidence is low and
  * the report says the comparison is indicative.
  */
-import type { Adapter } from '@faithful/core';
-import { parseColor, toHex } from '@faithful/core';
-import type { DesignElement, Inventory, Screen, Token } from '@faithful/spec';
-import { emptyInventory, SpecError, validateSpec } from '@faithful/spec';
+import type { Adapter } from '@usefaithful/core';
+import { parseColor, toHex } from '@usefaithful/core';
+import type { DesignElement, Inventory, Screen, Token } from '@usefaithful/spec';
+import { emptyInventory, SpecError, validateSpec } from '@usefaithful/spec';
 import { mergeInventory, provenance, screenId, spec } from './util.js';
 
 /** A malformed design file: the error names the file, and the run stops with exit 2. */

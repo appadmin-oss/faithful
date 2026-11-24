@@ -6,8 +6,8 @@ import { existsSync, statSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ADAPTERS } from '@faithful/adapters';
-import { BrowserError, Renderer } from '@faithful/browser';
+import { ADAPTERS } from '@usefaithful/adapters';
+import { BrowserError, Renderer } from '@usefaithful/browser';
 import {
   type Adapter,
   applyDeviations,
@@ -38,8 +38,8 @@ import {
   stressDelta,
   summarise,
   type Violation,
-} from '@faithful/core';
-import type { FaithfulSpec, Inventory, Viewport } from '@faithful/spec';
+} from '@usefaithful/core';
+import type { FaithfulSpec, Inventory, Viewport } from '@usefaithful/spec';
 
 export const OUT_DIR = '.faithful';
 export const BASELINE = 'faithful.baseline.json';
@@ -114,11 +114,20 @@ export function parseColorScheme(s: string | undefined, allowBoth = false): Colo
 }
 
 /**
+ * The passes every audit runs unless told otherwise: enlarged text and 320px reflow. A layout
+ * that only holds at the author's own text size and window is the fault no screenshot shows
+ * (MAM Academy, Nov 2026: a nav that wrapped and cut off its last button at 175% text).
+ */
+export const DEFAULT_STRESS: readonly StressMode[] = ['zoom', 'reflow'];
+
+/**
  * `--stress`: the i18n / resilience passes an audit runs IN ADDITION to the normal one, as a
- * comma list (CLI) or an array (MCP). An unknown name is a bad call, never silently skipped.
+ * comma list (CLI) or an array (MCP). Omitted: `DEFAULT_STRESS`; `none` (CLI): no extra pass.
+ * An unknown name is a bad call, never silently skipped.
  */
 export function parseStress(s: string | readonly string[] | undefined): StressMode[] {
-  if (s === undefined) return [];
+  if (s === undefined) return [...DEFAULT_STRESS];
+  if (typeof s === 'string' && s.trim().toLowerCase() === 'none') return [];
   const names = (typeof s === 'string' ? s.split(',') : [...s]).map((x) => x.trim().toLowerCase());
   const known = Object.keys(STRESS_CAUSE) as StressMode[];
   const out: StressMode[] = [];
@@ -534,7 +543,8 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
           baseDir: resolve(o.cwd ?? process.cwd(), o.target, '..'),
         };
     const results: ScreenResult[] = [];
-    const opts = { minTarget: Math.min(cfg.minTarget, 24) };
+    const narrowest = vps.reduce((a, b) => (b.width < a.width ? b : a));
+    const opts = { minTarget: Math.min(cfg.minTarget, 24), navMax: cfg.audit.navMax };
     for (const scheme of schemes)
       for (const vp of vps) {
         const browser = await session.browser();
@@ -545,6 +555,8 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
         if (named) for (const f of r.findings) f.viewport = `${f.viewport}${named}`;
         results.push(r);
         for (const mode of stresses) {
+          // Reflow narrows the window to 320, whatever it was: once per colour scheme, from the narrowest.
+          if (mode === 'reflow' && vp !== narrowest) continue;
           const screen = `audit@${vp.width}${named} ${mode}`;
           let s: ScreenResult;
           try {

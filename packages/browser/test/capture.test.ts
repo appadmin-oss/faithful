@@ -1,4 +1,4 @@
-import { compareScreens, DEFAULT_CONFIG } from '@faithful/core';
+import { compareScreens, DEFAULT_CONFIG } from '@usefaithful/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Renderer } from '../src/index.js';
 

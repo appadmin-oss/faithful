@@ -9,7 +9,7 @@ saying it tried. Faithful renders both, pairs every element, and says exactly wh
 a few lines an agent can act on:
 
 ```
-$ npx @faithful/cli verify design.html --build build.html --viewports 1440x900
+$ npx @usefaithful/cli verify design.html --build build.html --viewports 1440x900
 faithful FAIL 7E 1W · 87% match · 1 note · placed · web/html
 F1 E missing: text "Business" at 725,509 89×24 [div.plan:nth-of-type(3)>h2] @725,509 89×24
 F2 E missing: text "Single sign-on and audit logs." at 725,551 225×20 [div.plan:nth-of-type(3)>p] @725,551 225×20
@@ -32,13 +32,13 @@ A faithful build is one line:
 faithful PASS clean · 100% match · placed · web/html
 ```
 
-> **Use `npx @faithful/cli`, never `npx faithful`.** The unscoped name on npm is an unrelated
+> **Use `npx @usefaithful/cli`, never `npx faithful`.** The unscoped name on npm is an unrelated
 > package; in a project without Faithful installed, the short form downloads and runs it.
 
 ## No design? Audit the page
 
 ```
-$ npx @faithful/cli audit http://localhost:3000
+$ npx @usefaithful/cli audit http://localhost:3000
 ```
 
 Judges a page on its own, at a phone and a desktop width, and reports each fault once.
@@ -84,7 +84,7 @@ stay clean; both are run on every test.
 ## Refactoring or redesigning? Prove nothing was lost
 
 ```
-$ npx @faithful/cli parity --before http://localhost:3000 --after http://localhost:3001
+$ npx @usefaithful/cli parity --before http://localhost:3000 --after http://localhost:3001
 faithful FAIL 3E 2W · parity · parity@1
 F1 E lost: link "Delete account" → /account/delete is gone
 F2 E lost: field "email" (Email) is gone from the form; is it "emailAddress"? The server reads the name
@@ -148,7 +148,7 @@ Findings come back root-cause first: missing, copy and size before the positions
 ## For agents
 
 ```
-npx @faithful/cli init
+npx @usefaithful/cli init
 ```
 
 writes `faithful.config.json`, fourteen Agent Skills under `.agents/skills/` (see [Skills](#skills)),
@@ -159,7 +159,7 @@ Or attach the MCP server: six tools (`faithful_outline`, `faithful_verify`, `fai
 content.
 
 ```json
-{ "mcpServers": { "faithful": { "command": "npx", "args": ["-y", "@faithful/mcp"] } } }
+{ "mcpServers": { "faithful": { "command": "npx", "args": ["-y", "@usefaithful/mcp"] } } }
 ```
 
 The output is built for a token budget: a clean run is one line, a fix hint is printed once per
@@ -168,7 +168,7 @@ kind rather than once per finding, and the full result stays in `.faithful/last.
 
 ## Skills
 
-`npx @faithful/cli init` installs fourteen Agent Skills into `.agents/skills/` (read by Claude Code,
+`npx @usefaithful/cli init` installs fourteen Agent Skills into `.agents/skills/` (read by Claude Code,
 Codex, Cursor, Copilot, Gemini CLI and others). Each teaches one job and ends in the command
 that proves it was done:
 
@@ -253,12 +253,12 @@ otherwise the system Chrome or Chromium; set `FAITHFUL_CHROMIUM` to choose one.
 
 | Package | |
 |---|---|
-| `@faithful/cli` | The `faithful` command and the programmatic API |
-| `@faithful/mcp` | The MCP server |
-| `@faithful/core` | Matching, comparison, scoring, reports, guards (no browser) |
-| `@faithful/browser` | Rendering and extraction in Chromium |
-| `@faithful/adapters` | The design readers |
-| `@faithful/spec` | The Faithful spec types and validator |
+| `@usefaithful/cli` | The `faithful` command and the programmatic API |
+| `@usefaithful/mcp` | The MCP server |
+| `@usefaithful/core` | Matching, comparison, scoring, reports, guards (no browser) |
+| `@usefaithful/browser` | Rendering and extraction in Chromium |
+| `@usefaithful/adapters` | The design readers |
+| `@usefaithful/spec` | The Faithful spec types and validator |
 
 ## Contributing
 
@@ -269,6 +269,6 @@ without it. Security reports: [SECURITY.md](SECURITY.md).
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
-`@faithful/browser` depends on [axe-core](https://github.com/dequelabs/axe-core) (Mozilla
+`@usefaithful/browser` depends on [axe-core](https://github.com/dequelabs/axe-core) (Mozilla
 Public License 2.0, © Deque Systems), used unmodified and installed from npm alongside it; its
 source is available from that repository.

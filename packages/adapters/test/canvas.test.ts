@@ -6,8 +6,8 @@
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { Renderer } from '@faithful/browser';
-import { pickAdapter } from '@faithful/core';
+import { Renderer } from '@usefaithful/browser';
+import { pickAdapter } from '@usefaithful/core';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ADAPTERS, canvasAdapter, canvasBoards, designSystemAdapter, designSystemTokens } from '../src/index.js';
 

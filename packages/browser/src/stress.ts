@@ -66,6 +66,31 @@ export function expandText(): { applied: boolean; nodes: number } {
   return { applied: true, nodes: todo.length };
 }
 
+/**
+ * WCAG 1.4.4 Resize Text: every piece of text at 200%, the layout left as it is, the way a
+ * reader's text-only zoom or larger default font does it. Media queries do not see it, so a
+ * menu that fits at 1440 wraps or cuts off its last item — what a screenshot never shows
+ * (MAM Academy, Nov 2026: at 175% text the desktop nav wrapped and its last button was cut).
+ * Every size is read first, then written, so a parent's doubling is not doubled again.
+ */
+export function zoomText(): { applied: boolean; nodes: number } {
+  const SKIP = 'script,style,noscript,template,svg,math,[hidden]';
+  const els: [HTMLElement, number][] = [];
+  for (const el of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
+    if (el.closest(SKIP)) continue;
+    const own = Array.from(el.childNodes).some((n) => n.nodeType === 3 && /\S/.test(n.textContent ?? ''));
+    const field = /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(el.tagName);
+    if (!own && !field) continue;
+    els.push([el, Number.parseFloat(getComputedStyle(el).fontSize) || 16]);
+  }
+  for (const [el, size] of els) el.style.setProperty('font-size', `${size * 2}px`, 'important');
+  const first = els[0];
+  return {
+    applied: !first || Number.parseFloat(getComputedStyle(first[0]).fontSize) >= first[1] * 1.9,
+    nodes: els.length,
+  };
+}
+
 /** Right-to-left, the way a translated page declares it: `dir` on the root element. */
 export function setRtl(): { applied: boolean } {
   document.documentElement.setAttribute('dir', 'rtl');

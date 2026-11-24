@@ -31,15 +31,15 @@ anyway. Three shades of brand blue follow, and theming breaks.
 ## Prove it
 
 ```
-npx @faithful/cli guard
-npx @faithful/cli verify tokens.json --build <url>
+npx @usefaithful/cli guard
+npx @usefaithful/cli verify tokens.json --build <url>
 ```
 
 `guard` scans the source for raw colours, off-scale type and `!important`, and fails only on
 files that got worse than the committed `faithful.baseline.json`. `verify` against the token
 file checks that the rendered page uses only the system's colours, sizes and faces. When
 replacing existing hardcoded values, also run
-`npx @faithful/cli verify <before-url> --build <after-url>` so the swap moved nothing.
+`npx @usefaithful/cli verify <before-url> --build <after-url>` so the swap moved nothing.
 
 Never edit the baseline or the config to pass. Run `guard --update-baseline` only to lock in
 an improvement, and say so in the report.

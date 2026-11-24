@@ -6,7 +6,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { scoreAudit } from '@faithful/core';
+import { scoreAudit } from '@usefaithful/core';
 import type { Browser } from 'playwright-core';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { BrowserError, launchPlan, Renderer } from '../src/index.js';
@@ -29,10 +29,13 @@ describe('the renderer survives the page', () => {
       { timeoutMs: 10_000 },
     );
     expect(f.brokenImages.map((b) => b.src)).toEqual(['./100%.png']);
-    expect(f.runtime?.failed.filter((x) => x.status === 404).map((x) => x.url)).toEqual([
-      'http://faithful.localhost/__faithful__/100%.png',
-      'http://faithful.localhost/%',
-    ]);
+    // Two requests fail; which finishes first is the network's business, not the assertion's.
+    expect(
+      f.runtime?.failed
+        .filter((x) => x.status === 404)
+        .map((x) => x.url)
+        .sort(),
+    ).toEqual(['http://faithful.localhost/%', 'http://faithful.localhost/__faithful__/100%.png']);
   }, 30_000);
 
   it('a file whose name is literally "100%.png" is still served', async () => {

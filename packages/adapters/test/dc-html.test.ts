@@ -6,7 +6,7 @@
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Renderer } from '@faithful/browser';
+import { Renderer } from '@usefaithful/browser';
 import { afterAll, describe, expect, it } from 'vitest';
 import { dcHtmlAdapter, HOLE, missingScripts } from '../src/index.js';
 

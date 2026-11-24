@@ -8,7 +8,7 @@
  * is really a Claude Design template goes to the reader that understands it, not to the
  * generic HTML one — by content, never by extension alone.
  */
-import type { FaithfulSpec, Screen, Viewport } from '@faithful/spec';
+import type { FaithfulSpec, Screen, Viewport } from '@usefaithful/spec';
 
 export interface SourceInput {
   /** File path or URL, as given. */
@@ -44,7 +44,7 @@ export type Rendered = Screen & { probe?: unknown };
 
 export interface ReadContext {
   viewports: Viewport[];
-  /** Render a page and extract its elements. Supplied by @faithful/browser. */
+  /** Render a page and extract its elements. Supplied by @usefaithful/browser. */
   render(target: RenderTarget, viewport: Viewport, screenId: string): Promise<Rendered>;
   readFile(path: string): Promise<string>;
   exists(path: string): Promise<boolean>;

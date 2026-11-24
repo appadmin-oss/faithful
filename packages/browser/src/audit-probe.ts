@@ -3,10 +3,10 @@
  * SERIALISED with Function#toString and run in the page, so it must stay self-contained.
  *
  * It only MEASURES. Every judgement — what counts as clipped, how many tells make a page read
- * as generated — is made in `@faithful/core`'s `scoreAudit()`, where it can be tested without
+ * as generated — is made in `@usefaithful/core`'s `scoreAudit()`, where it can be tested without
  * a browser and tuned without re-rendering anything.
  */
-import type { AuditFacts } from '@faithful/core';
+import type { AuditFacts } from '@usefaithful/core';
 
 export function auditProbe(): AuditFacts {
   const W = window.innerWidth;
@@ -352,6 +352,49 @@ export function auditProbe(): AuditFacts {
       const href = e.getAttribute('href');
       if (href) c.href = href;
       return c;
+    });
+  /*
+   * Menus, for the navigation's LOGIC (not its looks): each navigation landmark outside the
+   * footer, its entries with where they go and whether one is marked as this page, and the
+   * longest run of sibling entries (one strip of the menu). Footers repeat the site's links on
+   * purpose and are left out.
+   */
+  const navs: NonNullable<AuditFacts['navs']> = all
+    .filter(
+      (e) =>
+        (e.tagName === 'NAV' || e.getAttribute('role') === 'navigation') && !e.closest('footer,[role=contentinfo]'),
+    )
+    .slice(0, 12)
+    .map((nav) => {
+      const links = Array.from(nav.querySelectorAll('a[href],[role=link],button,[role=tab],[role=menuitem]')).filter(
+        (e) => e.closest('nav,[role=navigation]') === nav,
+      );
+      const entries = links.slice(0, 80).map((e) => {
+        const text = (nameOf(e) || (e.textContent ?? '')).replace(/\s+/g, ' ').trim().slice(0, 60);
+        const entry: NonNullable<AuditFacts['navs']>[number]['entries'][number] = {
+          sel: path(e),
+          name: text,
+          visible: shown(e),
+        };
+        const href = e.getAttribute('href');
+        if (href) entry.href = href;
+        const cur = e.getAttribute('aria-current');
+        if ((cur && cur !== 'false') || e.getAttribute('aria-selected') === 'true') entry.current = true;
+        // A logo: an image (or svg) and no words of its own. Its name is the site's, not a page's.
+        if (e.querySelector('img,svg') && !(e.textContent ?? '').trim()) entry.logo = true;
+        return entry;
+      });
+      // The widest strip: the most entries sharing one parent list (li siblings, or direct children).
+      let strip = 0;
+      for (const list of Array.from(nav.querySelectorAll('ul,ol,[role=menubar],[role=tablist]'))) {
+        if (list.closest('nav,[role=navigation]') !== nav) continue;
+        const items = Array.from(list.children).filter(
+          (c) => shown(c) && c.querySelector('a[href],button,[role=link],[role=tab],[role=menuitem]'),
+        );
+        strip = Math.max(strip, items.length);
+      }
+      if (!strip) strip = entries.filter((x) => x.visible).length;
+      return { sel: path(nav), label: (nav.getAttribute('aria-label') ?? '').trim().slice(0, 60), entries, strip };
     });
   const labelOf = (el: Element) => {
     const id = el.getAttribute('id');
@@ -771,6 +814,7 @@ export function auditProbe(): AuditFacts {
     paragraphs,
     targets,
     controls,
+    navs,
     forms,
     landmarks,
     headings,

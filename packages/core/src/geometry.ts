@@ -1,4 +1,4 @@
-import type { Box } from '@faithful/spec';
+import type { Box } from '@usefaithful/spec';
 
 export const area = (b: Box): number => Math.max(0, b.w) * Math.max(0, b.h);
 

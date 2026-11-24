@@ -8,7 +8,7 @@ description: Make a UI that works and looks deliberate rather than generated —
 Run the audit at phone and desktop width:
 
 ```
-npx @faithful/cli audit <url-or-file>
+npx @usefaithful/cli audit <url-or-file>
 ```
 
 Fix every error (E). Each finding names the element and one fix.

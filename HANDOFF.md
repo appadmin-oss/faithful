@@ -12,7 +12,7 @@ what to do next, in order.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **Not published to npm.** The scope `@faithful` must be created on npmjs.com first. The
   unscoped name `faithful` belongs to an unrelated package: never tell anyone to run
-  `npx faithful`; it is always `npx @faithful/cli` (a test enforces this in every skill).
+  `npx faithful`; it is always `npx @usefaithful/cli` (a test enforces this in every skill).
 - **Suggested GitHub description:** "Prove UI work is right before calling it done. Verify a
   build against its design, audit any page for layout faults and AI-design slop, and check a
   refactor or redesign kept every feature. CLI, MCP server and Agent Skills for coding
@@ -30,7 +30,7 @@ what to do next, in order.
 | `parity --before <a> --after <b>` | Refactor/redesign: every link, button, form field name, landmark, route still there; looks ignored; renames flagged; self-check plants a loss before trusting itself | `fixtures/parity/` (a re-skin passes, four planted losses caught); `packages/core/test/parity.test.ts` |
 | Fourteen Agent Skills | `faithful`, `faithful-implement-design`, `faithful-ui-quality`, `faithful-safe-redesign`, `faithful-ui-copy`, `faithful-design-handoff`, `faithful-ui-states`, `faithful-responsive`, `faithful-accessible-forms`, `faithful-data-display`, `faithful-design-tokens`, `faithful-no-visual-change`, `faithful-dark-mode`, `faithful-i18n` in `packages/cli/skills/` (why: `docs/research/skills-2026-11.md`); installed by `init` (`--skills a,b` for a subset) | `packages/cli/test/skills.test.ts` (spec limits, a proving command, no `npx faithful`) |
 | `outline`, `spec`, `explain`, `guard`, `selftest`, `formats`, `doctor`, `init` | See `README.md` | `packages/cli/test/bin.test.ts` |
-| MCP server (`@faithful/mcp`) | Six tools: outline, verify, audit, parity, explain, guard | `packages/mcp/test/stdio.test.ts` (real stdio) |
+| MCP server (`@usefaithful/mcp`) | Six tools: outline, verify, audit, parity, explain, guard | `packages/mcp/test/stdio.test.ts` (real stdio) |
 
 Every detector was broken on purpose and its test watched to fail. Keep doing that
 (`AGENTS.md`). Exit codes: 0 pass, 1 fail, 2 bad call.
@@ -114,7 +114,7 @@ then breadth.
    sites, `npm run eval`): precision and recall, printed in the README. Re-measure after every
    rule change. UICrit (3,059 critiques; licence unverified) next.
 3. ~~Run axe-core inside `audit`~~ — done 20 Nov 2026. Plain `axe-core` (^4.14.1, MPL-2.0,
-   unmodified, a runtime dependency of `@faithful/browser`), evaluated in the probe's isolated
+   unmodified, a runtime dependency of `@usefaithful/browser`), evaluated in the probe's isolated
    world (`packages/browser/src/axe.ts`; a page cannot plant a fake `axe`), tags
    `wcag2a, wcag2aa, wcag21a, wcag21aa, wcag22aa`, once per viewport and colour scheme, never
    in stress passes, bounded by the capture timeout. Mapped in `packages/core/src/audit.ts`
@@ -169,7 +169,7 @@ then breadth.
   `grep -rlP '\x08' packages` finds it.
 - Never put a client's private design copy in tests, fixtures or the README.
 - `KINDS` (`packages/core/src/findings.ts`) is a public vocabulary: add, never rename.
-- Browser and CLI tests import `@faithful/core` from its built `dist`: after editing core,
+- Browser and CLI tests import `@usefaithful/core` from its built `dist`: after editing core,
   `npx tsc -b packages/core` before running them, or a break you planted is not seen.
 - axe-core is evaluated as a prelude in the probe's isolated world (`inWorld(…, prelude)` in
   `capture.ts`); its in-page runner (`runAxe`) is serialised like the probes, so no imports.

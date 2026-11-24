@@ -1,4 +1,4 @@
-import type { DesignElement, Screen } from '@faithful/spec';
+import type { DesignElement, Screen } from '@usefaithful/spec';
 
 export function screen(elements: DesignElement[], id = 's'): Screen {
   return { id, name: id, viewport: { width: 1280, height: 800 }, elements };

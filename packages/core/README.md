@@ -1,4 +1,4 @@
-# @faithful/core
+# @usefaithful/core
 
 Faithful's engine: element matching, measurement, colour, findings, scoring and the source guards. No runtime dependencies.
 

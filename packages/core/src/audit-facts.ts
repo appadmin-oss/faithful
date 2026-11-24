@@ -1,4 +1,4 @@
-/** What `faithful audit` reads off a rendered page (measured in the page by @faithful/browser). */
+/** What `faithful audit` reads off a rendered page (measured in the page by @usefaithful/browser). */
 export interface AuditFacts {
   viewport: { width: number; height: number };
   /** The page's own address, for resolving links. */
@@ -31,6 +31,17 @@ export interface AuditFacts {
    * marked: a control inside a closed menu is still something the user can do.
    */
   controls: { sel: string; role: 'link' | 'button'; name: string; href?: string; visible: boolean }[];
+  /**
+   * Navigation landmarks outside the footer: their entries (name, destination, whether marked
+   * as the current page, whether a logo) and `strip`, the most entries in one list of the menu.
+   * Optional: facts recorded before this was measured have none, and nothing is judged.
+   */
+  navs?: {
+    sel: string;
+    label: string;
+    entries: { sel: string; name: string; href?: string; visible: boolean; current?: boolean; logo?: boolean }[];
+    strip: number;
+  }[];
   /** Every form: where it sends, how, and the names the server will read. */
   forms: {
     sel: string;

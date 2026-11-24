@@ -17,8 +17,8 @@
  */
 
 import { dirname, join } from 'node:path';
-import type { Adapter, Rendered } from '@faithful/core';
-import type { DesignElement, Screen } from '@faithful/spec';
+import type { Adapter, Rendered } from '@usefaithful/core';
+import type { DesignElement, Screen } from '@usefaithful/spec';
 import { dcRuntime } from './dc-runtime.js';
 import { provenance, screenId, spec } from './util.js';
 

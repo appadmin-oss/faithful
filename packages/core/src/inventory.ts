@@ -8,7 +8,7 @@
  * It is weaker than a placed comparison and the report says so; it is far stronger than
  * nothing, which is what a pixel-only tool gives a design it cannot render.
  */
-import type { Inventory, Screen } from '@faithful/spec';
+import type { Inventory, Screen } from '@usefaithful/spec';
 import { deltaE, parseColor, toHex } from './color.js';
 import { type Charge, credit, primaryFamily, type ScreenResult, setRescore, type Tally } from './compare.js';
 import type { FaithfulConfig } from './config.js';

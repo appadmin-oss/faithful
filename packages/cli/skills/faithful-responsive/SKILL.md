@@ -11,11 +11,11 @@ in-between widths nobody looked at (768, 834, 1024).
 ## Check across the range
 
 ```
-npx @faithful/cli audit <url-or-file> --viewports 320x568,375x812,768x1024,1024x768,1440x900
+npx @usefaithful/cli audit <url-or-file> --viewports 320x568,375x812,768x1024,1024x768,1440x900
 ```
 
 Fix every error, then re-run. If the design has a phone board, also run
-`npx @faithful/cli verify <design> --build <url> --viewports 390x844,1440x900`.
+`npx @usefaithful/cli verify <design> --build <url> --viewports 390x844,1440x900`.
 
 ## Causes of sideways scroll, in order of frequency
 

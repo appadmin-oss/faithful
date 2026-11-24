@@ -21,12 +21,12 @@ A builder can only match what the handoff states. Everything left unsaid gets in
 5. **A spec**, so the build can be checked against the design automatically:
 
 ```
-npx @faithful/cli spec <prototype.html> --out <screen>.faithful.json
+npx @usefaithful/cli spec <prototype.html> --out <screen>.faithful.json
 ```
 
 ## Make the design pass its own checks
 
-Before handing off, run `npx @faithful/cli audit <prototype>`. Text contrast, target sizes
+Before handing off, run `npx @usefaithful/cli audit <prototype>`. Text contrast, target sizes
 and readable line lengths are rules, not taste: a design that fails them will be "improved"
 by the builder, and the build will then differ from what you drew.
 

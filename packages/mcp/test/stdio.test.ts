@@ -117,7 +117,8 @@ describe('faithful-mcp over stdio', () => {
       });
       expect(wrong.result.isError).toBe(true);
 
-      // stress reaches the renderer: a box that fits its text clips it only with WCAG spacing.
+      // stress reaches the renderer: a fixed-height box that fits its text clips it with WCAG
+      // spacing, and with 200% text, which every audit now tries unless told otherwise.
       writeFileSync(
         join(dir, 'spacing.html'),
         '<!doctype html><html lang="en"><head><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}.note{height:40px;width:300px;overflow:hidden;font:16px/20px Georgia}</style></head><body><main><div class="note">Bins go out on Tuesday night. Garden waste is collected every other week.</div></main></body></html>',
@@ -126,16 +127,18 @@ describe('faithful-mcp over stdio', () => {
         name: 'faithful_audit',
         arguments: { target: 'spacing.html', viewports: '800x600' },
       });
-      expect(plain.result.content[0].text).toMatch(/^faithful PASS/);
+      expect(plain.result.content[0].text).toMatch(/^faithful FAIL 1E 0W/);
+      expect(plain.result.content[0].text).toMatch(/clipped: with text at 200% \(WCAG 1\.4\.4\)/);
       const spaced = await c.call('tools/call', {
         name: 'faithful_audit',
         arguments: { target: 'spacing.html', viewports: '800x600', stress: ['spacing'] },
       });
       expect(spaced.result.structuredContent.top.map((f: { k: string }) => f.k)).toEqual(['clipped']);
+      expect(spaced.result.content[0].text).not.toMatch(/200%/);
       expect(spaced.result.content[0].text).toMatch(/with WCAG 1\.4\.12 text spacing/);
       const unknown = await c.call('tools/call', {
         name: 'faithful_audit',
-        arguments: { target: 'spacing.html', stress: ['zoom'] },
+        arguments: { target: 'spacing.html', stress: ['huge'] },
       });
       expect(unknown.result.isError).toBe(true);
     } finally {

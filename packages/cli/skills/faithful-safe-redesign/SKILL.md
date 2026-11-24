@@ -20,7 +20,7 @@ a menu item, a form field, a route, a delete button. This prevents it.
 Change one module, one component or one page at a time. After EVERY step:
 
 ```
-npx @faithful/cli parity --before <old-url-or-file> --after <new-url-or-file> [--pages /,/account]
+npx @usefaithful/cli parity --before <old-url-or-file> --after <new-url-or-file> [--pages /,/account]
 ```
 
 It compares what users can DO — links, buttons, form field names, landmarks, routes, script
@@ -41,7 +41,7 @@ of each may only go down.
 
 ## Improve, don't just move
 
-A redesign should be better than what it replaces: run `npx @faithful/cli audit` on the new
+A redesign should be better than what it replaces: run `npx @usefaithful/cli audit` on the new
 pages and fix what it finds. Better looks never excuse a lost function.
 
 ## Report

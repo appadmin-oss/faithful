@@ -8,7 +8,7 @@
  * match. Text that was split across elements or joined into one is recognised rather than
  * reported as one thing missing and two things extra.
  */
-import type { DesignElement, Viewport } from '@faithful/spec';
+import type { DesignElement, Viewport } from '@usefaithful/spec';
 import { assign } from './assign.js';
 import { centre, iou } from './geometry.js';
 import { dice, normalizeText } from './text.js';

@@ -12,7 +12,7 @@ clip, `left:` offsets point the wrong way, numbers are glued together by hand.
 ## Check it
 
 ```
-npx @faithful/cli audit <url-or-file> --stress expand,rtl,spacing
+npx @usefaithful/cli audit <url-or-file> --stress expand,rtl,spacing
 ```
 
 Each pass runs on top of the normal one, per viewport (`audit@375 expand`, `audit@375 rtl`,
@@ -68,7 +68,7 @@ re-run until it passes.
 
 ## Done means
 
-- `npx @faithful/cli audit <url> --stress expand,rtl,spacing` passes on every page you
+- `npx @usefaithful/cli audit <url> --stress expand,rtl,spacing` passes on every page you
   changed, at phone and desktop width (paste the line as proof).
 - Any `unmeasured` note was explained, and the real translations were checked by eye in the
   longest language you ship.

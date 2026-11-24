@@ -12,6 +12,7 @@
  * team reviews in a diff; a verifier the agent can quietly loosen is no verifier.
  */
 
+import { McpServer } from '@modelcontextprotocol/server';
 import {
   audit,
   FaithfulError,
@@ -23,9 +24,8 @@ import {
   outlineAny,
   parity,
   verify,
-} from '@faithful/cli';
-import { explain, formatCompact, formatText } from '@faithful/core';
-import { McpServer } from '@modelcontextprotocol/server';
+} from '@usefaithful/cli';
+import { explain, formatCompact, formatText } from '@usefaithful/core';
 import { z } from 'zod';
 
 export const VERSION = '0.1.0';
@@ -113,10 +113,10 @@ export function createServer(cwd = process.cwd()): McpServer {
         viewports: z.string().optional().describe('Default "375x812,1440x900"'),
         colorScheme: z.enum(['light', 'dark', 'both']).optional().describe('Default light; both = each viewport twice'),
         stress: z
-          .array(z.enum(['expand', 'rtl', 'spacing']))
+          .array(z.enum(['expand', 'rtl', 'spacing', 'zoom', 'reflow']))
           .optional()
           .describe(
-            'Extra passes per viewport: expand = text 1.3-2x longer (translation), rtl = dir="rtl", spacing = WCAG 1.4.12. Reports only the layout faults each adds.',
+            'Extra passes: expand = text 1.3-2x longer (translation), rtl = dir="rtl", spacing = WCAG 1.4.12, zoom = text at 200% (WCAG 1.4.4), reflow = 320px wide (WCAG 1.4.10). Default zoom and reflow. Reports only the layout faults each adds.',
           ),
         max: z.number().int().min(1).max(50).optional(),
       }),

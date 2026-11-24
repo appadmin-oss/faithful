@@ -34,12 +34,12 @@ scrolls the whole page, and numbers that jump around as they update.
 ## Prove it
 
 ```
-npx @faithful/cli audit <dashboard-url> --viewports 375x812,1440x900
+npx @usefaithful/cli audit <dashboard-url> --viewports 375x812,1440x900
 ```
 
 It flags unrendered values, placeholder or dummy data, clipped cells, overlapping labels and
 sideways scroll. Audit the empty and error states too (see `faithful-ui-states`). With a
-design, also run `npx @faithful/cli verify <design> --build <dashboard-url>`.
+design, also run `npx @usefaithful/cli verify <design> --build <dashboard-url>`.
 
 ## Report
 

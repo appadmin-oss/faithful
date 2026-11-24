@@ -12,12 +12,12 @@ fields, shadows that vanish, black icons on black.
 ## Check both themes
 
 ```
-npx @faithful/cli audit <url-or-file> --color-scheme both
+npx @usefaithful/cli audit <url-or-file> --color-scheme both
 ```
 
 Every viewport is rendered in light and in dark; findings name the screen (`audit@375 dark`).
 Fix every error, then re-run until it passes. With a design, check the dark board too:
-`npx @faithful/cli verify <design> --build <url> --color-scheme dark`.
+`npx @usefaithful/cli verify <design> --build <url> --color-scheme dark`.
 
 `contrast` findings are grouped by colour pair: one fix to a token clears every text using it.
 A "not judged" note (text over an image, a gradient, a video, a blend) is never a pass: check
@@ -34,7 +34,7 @@ those by eye in both themes.
 2. **Swap semantic tokens, never components.** Name colours by role (`--surface`, `--text`,
    `--text-muted`, `--border`, `--accent`) and redefine only those per theme, in one place.
    A component that names a raw colour, or has its own `@media (prefers-color-scheme)` block,
-   will be missed next time. `npx @faithful/cli guard` catches raw colours.
+   will be missed next time. `npx @usefaithful/cli guard` catches raw colours.
 3. **Give `body` an explicit background and text colour in both themes.** The default canvas
    differs between browsers and schemes; never rely on it.
 4. **Contrast in both themes:** text 4.5:1, large text (24px, or bold 18.66px) 3:1 (WCAG 2.2
@@ -59,6 +59,6 @@ those by eye in both themes.
 
 ## Done means
 
-- `npx @faithful/cli audit <url> --color-scheme both` passes on every page you changed (paste
+- `npx @usefaithful/cli audit <url> --color-scheme both` passes on every page you changed (paste
   the line as proof), and any "not judged" texts were checked by eye.
 - The toggle was tried both ways against both system settings.

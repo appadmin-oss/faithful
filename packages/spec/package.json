@@ -1,5 +1,5 @@
 {
-  "name": "@faithful/spec",
+  "name": "@usefaithful/spec",
   "version": "0.1.0",
   "description": "The Faithful design spec: one versioned shape every adapter reads into and every check reads from.",
   "license": "Apache-2.0",

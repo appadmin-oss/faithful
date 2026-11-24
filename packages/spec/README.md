@@ -1,4 +1,4 @@
-# @faithful/spec
+# @usefaithful/spec
 
 The Faithful design spec: one versioned shape every adapter reads into and every check reads from.
 

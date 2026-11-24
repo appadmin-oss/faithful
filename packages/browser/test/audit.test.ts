@@ -5,7 +5,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { mergeViewports, scoreAudit, stressDelta } from '@faithful/core';
+import { mergeViewports, scoreAudit, stressDelta } from '@usefaithful/core';
 import { type Browser, chromium } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Renderer } from '../src/index.js';
@@ -75,6 +75,16 @@ describe('audit probe', () => {
     // Once per fault, not once per viewport.
     expect(f.filter((x) => x.kind === 'broken')).toHaveLength(1);
     expect(f.filter((x) => x.kind === 'runtime')).toHaveLength(0);
+  }, 90_000);
+
+  it("finds a menu's logic faults on a real page (MAM Academy's portal, Nov 2026)", async () => {
+    const f = await run('nav.html');
+    const nav = f.filter((x) => x.kind === 'navigation').map((x) => x.detail);
+    expect(nav.some((d) => /2 names \("Grade entry", "Marking"\)/.test(d))).toBe(true);
+    expect(nav.some((d) => /the "More" menu lists 8 entries in one strip \(more than 7\)/.test(d))).toBe(true);
+    expect(f.some((x) => x.kind === 'heading' && /no h1: its title "Marking" is an h2/.test(x.detail))).toBe(true);
+    // Once each, not once per viewport.
+    expect(nav.filter((d) => /2 names/.test(d))).toHaveLength(1);
   }, 90_000);
 
   it('the clean page has nothing to report', async () => {
@@ -428,4 +438,43 @@ describe('audit --stress: i18n and resilience passes', () => {
         expect(stressDelta(normal, stressed, mode).findings, `${mode}@${width}`).toEqual([]);
       }
   });
+});
+
+describe('enlarged text and 320px reflow (MAM Academy, Nov 2026)', () => {
+  // A desktop bar sized for its words at the author's text size: one row, no room to spare,
+  // its overflow hidden. At 200% text the last entry is cut off; at the author's size it is not.
+  const BAR = `<!doctype html><html lang="en"><head><title>Academy</title><style>body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}
+nav{height:48px;overflow:hidden;white-space:nowrap}nav a{display:inline-block;padding:12px 10px;color:#123}main{padding:16px}</style></head>
+<body><nav aria-label="Main"><a href="/a">Programmes</a><a href="/b">About us</a><a href="/c">Life at MAM</a><a href="/d">Auditer</a><a href="/apply">Apply now</a></nav>
+<main><h1>Academy</h1><p>Short and plain.</p></main></body></html>`;
+  // 340px of fixed width: fine at 375, a sideways scroll at 320.
+  const WIDE = `<!doctype html><html lang="en"><head><title>Academy</title><style>body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}.card{width:340px;margin:0 auto}</style></head>
+<body><main><h1>Academy</h1><div class="card"><p>Short and plain.</p></div></main></body></html>`;
+  const pass = async (html: string, vp: { width: number; height: number }, stress: 'zoom' | 'reflow') => {
+    const normal = scoreAudit(await r.audit({ html, baseDir: FIX }, vp, {}), 's');
+    const stressed = scoreAudit(await r.audit({ html, baseDir: FIX }, vp, { stress }), 's');
+    return { normal, delta: stressDelta(normal, stressed, stress) };
+  };
+
+  it('a bar that fits at the author’s size loses its last entry at 200% text, and only that pass says so', async () => {
+    const { normal, delta } = await pass(BAR, { width: 1440, height: 900 }, 'zoom');
+    expect(normal.findings.filter((x) => x.kind === 'clipped')).toEqual([]);
+    expect(delta.findings.some((x) => x.kind === 'clipped' && /text at 200%/.test(x.detail))).toBe(true);
+  }, 90_000);
+
+  it('a page that fits 375 but not 320 scrolls sideways only in the reflow pass', async () => {
+    const { normal, delta } = await pass(WIDE, { width: 375, height: 812 }, 'reflow');
+    expect(normal.findings.filter((x) => x.kind === 'overflow')).toEqual([]);
+    expect(delta.findings.map((x) => `${x.severity}:${x.kind}`)).toContain('error:overflow');
+    expect(delta.findings.find((x) => x.kind === 'overflow')?.detail).toMatch(/at 320px wide/);
+  }, 90_000);
+
+  it('the clean page survives both', async () => {
+    const html = readFileSync(resolve(FIX, 'clean.html'), 'utf8');
+    for (const [vp, s] of [
+      [{ width: 1440, height: 900 }, 'zoom'],
+      [{ width: 375, height: 812 }, 'reflow'],
+    ] as const)
+      expect((await pass(html, vp, s)).delta.findings, s).toEqual([]);
+  }, 120_000);
 });

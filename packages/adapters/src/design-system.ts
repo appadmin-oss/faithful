@@ -24,10 +24,10 @@
  * font size; spacing, shadows and breakpoints are kept as tokens but are not in the inventory.
  */
 import { basename, dirname, join } from 'node:path';
-import type { Adapter, ReadContext } from '@faithful/core';
-import { parseColor, toHex } from '@faithful/core';
-import type { Inventory, Token } from '@faithful/spec';
-import { emptyInventory, SpecError } from '@faithful/spec';
+import type { Adapter, ReadContext } from '@usefaithful/core';
+import { parseColor, toHex } from '@usefaithful/core';
+import type { Inventory, Token } from '@usefaithful/spec';
+import { emptyInventory, SpecError } from '@usefaithful/spec';
 import { px } from './formats.js';
 import { mergeInventory, provenance, spec } from './util.js';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@faithful/cli",
+  "name": "@usefaithful/cli",
   "version": "0.1.0",
   "description": "The faithful command: verify a build against its design, guard the source, and hand agents only what they need.",
   "license": "Apache-2.0",
@@ -24,10 +24,10 @@
     "directory": "packages/cli"
   },
   "dependencies": {
-    "@faithful/spec": "workspace:*",
-    "@faithful/core": "workspace:*",
-    "@faithful/browser": "workspace:*",
-    "@faithful/adapters": "workspace:*"
+    "@usefaithful/spec": "workspace:*",
+    "@usefaithful/core": "workspace:*",
+    "@usefaithful/browser": "workspace:*",
+    "@usefaithful/adapters": "workspace:*"
   },
   "bin": {
     "faithful": "./dist/bin.js"

@@ -1,4 +1,4 @@
-# @faithful/browser
+# @usefaithful/browser
 
 Render a page in a real browser and read every visible element, for Faithful.
 

@@ -1,5 +1,5 @@
-import type { FaithfulSpec, Inventory, Provenance, Tier } from '@faithful/spec';
-import { SPEC_VERSION } from '@faithful/spec';
+import type { FaithfulSpec, Inventory, Provenance, Tier } from '@usefaithful/spec';
+import { SPEC_VERSION } from '@usefaithful/spec';
 
 export const VERSION = '0.1.0';
 

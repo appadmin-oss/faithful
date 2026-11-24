@@ -47,6 +47,11 @@ export interface FaithfulConfig {
   audit: {
     /** Run axe-core's WCAG 2.2 A/AA rules in `faithful audit` (on by default). */
     axe: boolean;
+    /**
+     * The most entries one strip of a menu may hold before it is reported (default 7). A site
+     * with its own rule (six, say) sets it here.
+     */
+    navMax: number;
   };
 }
 
@@ -81,7 +86,7 @@ export const DEFAULT_CONFIG: FaithfulConfig = {
       'inline-style': false,
     },
   },
-  audit: { axe: true },
+  audit: { axe: true, navMax: 7 },
 };
 
 export class ConfigError extends Error {

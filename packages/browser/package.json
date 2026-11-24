@@ -1,5 +1,5 @@
 {
-  "name": "@faithful/browser",
+  "name": "@usefaithful/browser",
   "version": "0.1.0",
   "description": "Render a page in a real browser and read every visible element, for Faithful.",
   "license": "Apache-2.0",
@@ -23,8 +23,8 @@
     "directory": "packages/browser"
   },
   "dependencies": {
-    "@faithful/core": "workspace:*",
-    "@faithful/spec": "workspace:*",
+    "@usefaithful/core": "workspace:*",
+    "@usefaithful/spec": "workspace:*",
     "axe-core": "^4.14.1",
     "playwright-core": "^1.65.1"
   }

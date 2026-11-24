@@ -7,7 +7,7 @@
  * fault, and the agent fixes the wrong hundred. Measured against the nearest matched
  * neighbours it is the one size finding on the header, and the rest pass.
  */
-import type { DesignElement, ElementStyle, Screen } from '@faithful/spec';
+import type { DesignElement, ElementStyle, Screen } from '@usefaithful/spec';
 import { contrastRatio, deltaE, isTransparent, parseColor } from './color.js';
 import type { FaithfulConfig } from './config.js';
 import type { Finding, Kind, Severity } from './findings.js';

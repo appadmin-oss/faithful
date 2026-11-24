@@ -4,7 +4,7 @@
  */
 
 import { dirname } from 'node:path';
-import type { Adapter } from '@faithful/core';
+import type { Adapter } from '@usefaithful/core';
 import { provenance, screenId, spec } from './util.js';
 
 export const htmlAdapter: Adapter = {

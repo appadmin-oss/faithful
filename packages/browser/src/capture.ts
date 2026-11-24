@@ -7,18 +7,20 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
-import { type AuditFacts, FILE_ENTRY_DIR, FILE_ORIGIN, type Rendered, type RenderTarget } from '@faithful/core';
-import type { DesignElement, Region, Screen, Viewport } from '@faithful/spec';
+import { type AuditFacts, FILE_ENTRY_DIR, FILE_ORIGIN, type Rendered, type RenderTarget } from '@usefaithful/core';
+import type { DesignElement, Region, Screen, Viewport } from '@usefaithful/spec';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { auditProbe } from './audit-probe.js';
 import { AXE_TAGS, axeSource, runAxe } from './axe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
-import { expandText, setRtl, setSpacing } from './stress.js';
+import { expandText, setRtl, setSpacing, zoomText } from './stress.js';
 
 /** `faithful audit --stress`: what the page is put through before it is measured. */
-export type Stress = 'expand' | 'rtl' | 'spacing';
-const STRESS = { expand: expandText, rtl: setRtl, spacing: setSpacing } as const;
+export type Stress = 'expand' | 'rtl' | 'spacing' | 'zoom' | 'reflow';
+/** Passes that change the page; `reflow` changes the window instead (320 CSS px, WCAG 1.4.10). */
+const STRESS = { expand: expandText, rtl: setRtl, spacing: setSpacing, zoom: zoomText } as const;
+export const REFLOW_WIDTH = 320;
 
 export interface CaptureOptions {
   ignore?: string[];
@@ -210,7 +212,11 @@ export class Renderer {
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
       await this.settle(page, target, timeout);
-      if (opts.stress) {
+      if (opts.stress === 'reflow') {
+        // The window narrowed to 320 CSS px after load, as a 1280 screen at 400% zoom lays out.
+        await page.setViewportSize({ width: REFLOW_WIDTH, height: page.viewportSize()?.height ?? 800 });
+        await this.settle(page, target, timeout);
+      } else if (opts.stress) {
         // Mutated from the isolated world: the DOM is shared, so the page lays out the change.
         const done = await within(
           inWorld<{ applied: boolean }>(page, STRESS[opts.stress]),

@@ -43,7 +43,7 @@ describe('shipped skills', () => {
       });
       it('stays small, names a command that proves the work, and never says `npx faithful`', () => {
         expect(body.split('\n').length).toBeLessThan(100);
-        expect(body).toMatch(/npx @faithful\/cli (verify|audit|parity|outline|spec|guard)/);
+        expect(body).toMatch(/npx @usefaithful\/cli (verify|audit|parity|outline|spec|guard)/);
         expect(body).not.toMatch(/npx faithful\b/);
       });
     });

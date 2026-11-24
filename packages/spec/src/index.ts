@@ -7,7 +7,7 @@
  * verifier, the guards or an agent's prompt having to change with it.
  *
  * Coordinates are CSS pixels, origin at the top left of the screen's viewport, the page
- * scrolled to the top. Colours are CSS strings as the source gave them; `@faithful/core`
+ * scrolled to the top. Colours are CSS strings as the source gave them; `@usefaithful/core`
  * normalises them. Lengths in `style` are pixels.
  */
 

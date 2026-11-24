@@ -1,4 +1,4 @@
-# @faithful/mcp
+# @usefaithful/mcp
 
 Faithful as an MCP server: six small tools any agent can call.
 

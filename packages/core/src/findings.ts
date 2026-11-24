@@ -1,4 +1,4 @@
-import type { Box } from '@faithful/spec';
+import type { Box } from '@usefaithful/spec';
 
 export type Severity = 'error' | 'warn' | 'info';
 
@@ -53,6 +53,9 @@ export const KINDS = {
   changed: 'Check this was meant: it now goes or sends somewhere else.',
   renamed: 'Confirm the new name is the same action; if it is, record it so the next run knows.',
   improved: 'The build departs from the design here and is measurably better; keep it and tell the designer.',
+  navigation:
+    'One name per destination, the same in the menu and on the page it opens; keep each strip of a menu short.',
+  heading: 'Give the page one h1 that names it, and do not skip heading levels.',
 } as const;
 
 export type Kind = keyof typeof KINDS;

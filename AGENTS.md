@@ -13,6 +13,6 @@ catch real faults and must not report correct code. Read `CONTRIBUTING.md` first
 - `KINDS` in `packages/core/src/findings.ts` is a public vocabulary: never rename a kind.
 - The CLI and the MCP server are thin shells over `packages/cli/src/api.ts`. Put logic there,
   never in only one of them.
-- In docs and agent-facing text, spell the command `npx @faithful/cli`, never `npx faithful`
+- In docs and agent-facing text, spell the command `npx @usefaithful/cli`, never `npx faithful`
   (the unscoped npm name is somebody else's package).
 - No new runtime dependency without discussion.
