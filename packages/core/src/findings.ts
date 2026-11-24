@@ -57,6 +57,7 @@ export const KINDS = {
     'One name per destination, the same in the menu and on the page it opens; keep each strip of a menu short.',
   heading: 'Give the page one h1 that names it, and do not skip heading levels.',
   dead: 'Point it at a real place, or make it a button if it acts: a link that goes nowhere is a dead end.',
+  consistency: 'Use the value the page already uses: this is a near-copy of it, made once.',
 } as const;
 
 export type Kind = keyof typeof KINDS;

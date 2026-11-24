@@ -92,10 +92,12 @@ export const localPath = (s: string): string => (/^file:\/\//i.test(s) ? fileURL
 export function parseViewports(s: string | undefined, fallback: Viewport[]): Viewport[] {
   if (!s) return fallback;
   return s.split(',').map((p) => {
-    const m = /^(\d+)(?:x(\d+))?$/.exec(p.trim());
-    if (!m) throw new FaithfulError(`bad viewport "${p}": use WIDTHxHEIGHT, e.g. 1440x900`);
+    const m = /^(\d+)(?:x(\d+))?(?::(phone|tablet|desktop))?$/.exec(p.trim());
+    if (!m) throw new FaithfulError(`bad viewport "${p}": use WIDTHxHEIGHT, e.g. 1440x900, or 1024x768:tablet`);
     const width = Number(m[1]);
-    return { width, height: m[2] ? Number(m[2]) : width < 600 ? 844 : 900 };
+    const vp: Viewport = { width, height: m[2] ? Number(m[2]) : width < 600 ? 844 : 900 };
+    if (m[3]) vp.device = m[3] as NonNullable<Viewport['device']>;
+    return vp;
   });
 }
 
@@ -157,7 +159,8 @@ export class Session {
     return this.renderer;
   }
 
-  context(viewports: Viewport[]): ReadContext {
+  /** `asPage`: what is rendered is the build, a deployed page (see deviceContext). */
+  context(viewports: Viewport[], asPage = false): ReadContext {
     return {
       viewports,
       render: async (target, vp, id) =>
@@ -165,6 +168,7 @@ export class Session {
           ignore: this.config.ignore,
           colorScheme: this.colorScheme,
           ...(this.scrollY ? { scrollY: this.scrollY } : {}),
+          ...(asPage ? { asPage } : {}),
         }),
       readFile: (p) => readFile(p, 'utf8'),
       exists: async (p) => existsSync(p),
@@ -374,6 +378,8 @@ async function compareAt(o: VerifyOptions, scrollY: number) {
       for (const sc of s.screens) extra.push(inventoryOf(sc));
       design.provenance.warnings.push(...s.provenance.warnings.map((w) => `${a}: ${w}`));
     }
+    // The build is rendered as the design is (touch on phones and tablets, no 980px fallback):
+    // verify compares like with like. A missing viewport meta is audit's finding, not verify's.
     const ctx = session.context(vps);
     if (!isUrl(o.build) && !existsSync(at(o.build))) throw new FaithfulError(`not found: ${o.build}`);
     const buildTarget = isUrl(o.build)

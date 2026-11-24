@@ -9,7 +9,16 @@
 import type { AuditFacts } from '@usefaithful/core';
 
 export function auditProbe(): AuditFacts {
-  const W = window.innerWidth;
+  /*
+   * The width the reader has. A phone that honours `width=device-width` and finds content
+   * wider than the screen zooms the page OUT to fit (Android Chrome; Playwright's isMobile
+   * does the same), so innerWidth grows with the overflow and would hide it: the screen's own
+   * width is the measure then. With no viewport meta the page is laid out at ~980px on
+   * purpose, and that layout width is the measure (its own finding says why it is wrong).
+   */
+  const W = document.querySelector('meta[name="viewport"]')
+    ? Math.min(window.innerWidth, window.screen.width || window.innerWidth)
+    : window.innerWidth;
   const H = window.innerHeight;
   const cs = (e: Element) => getComputedStyle(e);
   const path = (e: Element): string => {
@@ -114,7 +123,10 @@ export function auditProbe(): AuditFacts {
   // ── Overflow: only when the page itself scrolls sideways ───────────────────────────
   // A right-to-left page scrolls the other way: what lies past its LEFT edge is the overflow.
   const rtlPage = cs(document.documentElement).direction === 'rtl';
-  const past = (r: DOMRect) => (rtlPage ? r.left < -1 : r.right > W + 1);
+  // When a phone has zoomed out to fit (W < innerWidth), a right-to-left reader's screen is the
+  // RIGHT-hand W pixels of the widened layout, so its left edge is at innerWidth − W.
+  const leftEdge = Math.max(0, window.innerWidth - W);
+  const past = (r: DOMRect) => (rtlPage ? r.left < leftEdge - 1 : r.right > W + 1);
   const scrollWidth = document.documentElement.scrollWidth;
   const overflow: AuditFacts['overflow'] = [];
   if (scrollWidth > W + 1) {
@@ -412,7 +424,62 @@ export function auditProbe(): AuditFacts {
     }
     if (dead && deadLinks.length < 20) deadLinks.push({ sel: path(a), name, href });
   }
+  /*
+   * The page's own values, counted: with no design to compare against, the page is its own
+   * reference, and a value used once beside a near-copy used everywhere is the agent's slip.
+   * Colours of text, fills and borders; font sizes of text; radii of boxes; and how each
+   * filled button is drawn.
+   */
+  const tally = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+  const hex = (c: { r: number; g: number; b: number }) =>
+    `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+  const colorUse = new Map<string, number>();
+  const sizeUse = new Map<string, number>();
+  const radiusUse = new Map<string, number>();
+  const buttons: NonNullable<AuditFacts['palette']>['buttons'] = [];
+  for (const e of all) {
+    if (!shown(e) || ariaHidden(e)) continue;
+    const s = cs(e);
+    const own = Array.from(e.childNodes).some((n) => n.nodeType === 3 && /\S/.test(n.textContent ?? ''));
+    if (own) {
+      const c = rgb(s.color);
+      if (c && c.a > 0.5) tally(colorUse, hex(c));
+      tally(sizeUse, String(Math.round(Number.parseFloat(s.fontSize) * 2) / 2));
+    }
+    const bg = rgb(s.backgroundColor);
+    if (bg && bg.a > 0.5) tally(colorUse, hex(bg));
+    const bw = Number.parseFloat(s.borderTopWidth) || 0;
+    const bc = rgb(s.borderTopColor);
+    if (bw >= 1 && bc && bc.a > 0.5) tally(colorUse, hex(bc));
+    const rad = Number.parseFloat(s.borderTopLeftRadius) || 0;
+    const r = e.getBoundingClientRect();
+    if (rad > 0 && rad < r.height / 2 - 1 && ((bg && bg.a > 0.05) || bw >= 1))
+      tally(radiusUse, String(Math.round(rad)));
+    if (
+      e.matches('button,a[href],[role=button],input[type=submit]') &&
+      bg &&
+      bg.a > 0.5 &&
+      r.height >= 24 &&
+      buttons.length < 60
+    )
+      buttons.push({
+        sel: path(e),
+        text: (nameOf(e) || (e.textContent ?? '')).replace(/\s+/g, ' ').trim().slice(0, 30),
+        radius: Math.round(rad >= r.height / 2 - 1 ? 999 : rad),
+        height: Math.round(r.height),
+        fontSize: Number.parseFloat(s.fontSize) || 0,
+        fontWeight: Number.parseInt(s.fontWeight, 10) || 400,
+      });
+  }
+  const sorted = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1]).slice(0, 60);
+  const palette: NonNullable<AuditFacts['palette']> = {
+    colors: sorted(colorUse),
+    sizes: sorted(sizeUse).map(([k, n]) => [Number(k), n] as [number, number]),
+    radii: sorted(radiusUse).map(([k, n]) => [Number(k), n] as [number, number]),
+    buttons,
+  };
   const docMeta = {
+    viewportMeta: !!document.querySelector('meta[name="viewport"]'),
     title: document.title.trim().slice(0, 120),
     description: (document.querySelector('meta[name="description"]')?.getAttribute('content') ?? '')
       .trim()
@@ -905,6 +972,7 @@ export function auditProbe(): AuditFacts {
     navs,
     deadLinks,
     doc: docMeta,
+    palette,
     forms,
     landmarks,
     headings,

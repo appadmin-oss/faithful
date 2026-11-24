@@ -44,8 +44,24 @@ export interface AuditFacts {
   }[];
   /** Links that go nowhere: `#`, empty, `javascript:`, or `#id` with no such id. Optional for older facts. */
   deadLinks?: { sel: string; name: string; href: string }[];
-  /** The document's own title and meta description. Optional for older facts. */
-  doc?: { title: string; description: string };
+  /**
+   * The page's own values with how often each is used (most first): colours (hex) of text,
+   * fills and borders; text sizes; box radii; and each filled button's shape and type.
+   * Optional for older facts.
+   */
+  palette?: {
+    colors: [string, number][];
+    sizes: [number, number][];
+    radii: [number, number][];
+    buttons: { sel: string; text: string; radius: number; height: number; fontSize: number; fontWeight: number }[];
+  };
+  /**
+   * The document's own title and meta description, and whether it has a viewport meta tag.
+   * Optional for older facts.
+   */
+  doc?: { title: string; description: string; viewportMeta?: boolean };
+  /** The device the page was rendered as (filled by the renderer). */
+  device?: 'phone' | 'tablet' | 'desktop';
   /** Every form: where it sends, how, and the names the server will read. */
   forms: {
     sel: string;

@@ -70,6 +70,20 @@ export interface Region {
 export interface Viewport {
   width: number;
   height: number;
+  /** The kind of device the width stands for; default from the width (`deviceOf`). */
+  device?: Device;
+}
+
+/**
+ * Which device a viewport is. A phone or a tablet has touch and no hover, so a page's
+ * `(hover: none)` and `(pointer: coarse)` rules apply there; a 390px desktop window is not a
+ * phone, and checking one as if it were reads the wrong design.
+ */
+export type Device = 'phone' | 'tablet' | 'desktop';
+
+/** Under 768px a phone, under 1024px a tablet, else a desktop, unless the viewport says. */
+export function deviceOf(v: Viewport): Device {
+  return v.device ?? (v.width < 768 ? 'phone' : v.width < 1024 ? 'tablet' : 'desktop');
 }
 
 export interface Screen {

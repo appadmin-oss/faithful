@@ -552,3 +552,101 @@ describe('what a scaffold or an agent leaves behind (after slop-detect and Hallm
     expect(kinds(clean({ imageSrcs: ['https://i.pravatar.cc/150?img=3'] }))).toEqual(['warn:placeholder']);
   });
 });
+
+describe('consistency: the page as its own reference', () => {
+  const pal = (over: Partial<NonNullable<AuditFacts['palette']>>): AuditFacts['palette'] => ({
+    colors: [],
+    sizes: [],
+    radii: [],
+    buttons: [],
+    ...over,
+  });
+  const btn = (radius: number, text = 'Go') => ({ sel: 'a', text, radius, height: 44, fontSize: 16, fontWeight: 600 });
+
+  it('a colour used once a hair away from the brand colour is reported, with both and their counts', () => {
+    const f = clean({
+      palette: pal({
+        colors: [
+          ['#2563eb', 14],
+          ['#111111', 30],
+          ['#2765ea', 1],
+        ],
+      }),
+    });
+    expect(scoreAudit(f, 's').findings.map((x) => x.detail)).toEqual([
+      expect.stringMatching(/^colour #2765ea \(×1\) is a near-copy of #2563eb \(×14\), ΔE \d\.\d$/),
+    ]);
+  });
+
+  it('a genuinely different value is a choice: an accent, a display size, a pill', () => {
+    const f = clean({
+      palette: pal({
+        colors: [
+          ['#2563eb', 14],
+          ['#f59e0b', 1],
+        ],
+        sizes: [
+          [16, 40],
+          [48, 1],
+        ],
+        radii: [
+          [8, 20],
+          [24, 1],
+        ],
+      }),
+    });
+    expect(kinds(f)).toEqual([]);
+  });
+
+  it('15px among 16px and a 6px corner among 8px ones are near-copies; two uses of each are not "everywhere"', () => {
+    expect(
+      kinds(
+        clean({
+          palette: pal({
+            sizes: [
+              [16, 40],
+              [15, 1],
+            ],
+            radii: [
+              [8, 20],
+              [6, 2],
+            ],
+          }),
+        }),
+      ),
+    ).toEqual(['warn:consistency', 'warn:consistency']);
+    // Used five times, 15px is a second size the page keeps, not a slip.
+    expect(
+      kinds(
+        clean({
+          palette: pal({
+            sizes: [
+              [16, 40],
+              [15, 5],
+            ],
+          }),
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      kinds(
+        clean({
+          palette: pal({
+            sizes: [
+              [16, 2],
+              [15, 1],
+            ],
+          }),
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('a minority of buttons shaped unlike the rest is reported; two families of equal size are a system', () => {
+    const odd = clean({ palette: pal({ buttons: [btn(10), btn(10), btn(10), btn(10), btn(4, 'Save')] }) });
+    expect(scoreAudit(odd, 's').findings.map((x) => x.detail)).toEqual([
+      '1 of 5 buttons are shaped differently (4px corners, the rest 10px), e.g. "Save"',
+    ]);
+    expect(kinds(clean({ palette: pal({ buttons: [btn(10), btn(10), btn(999), btn(999)] }) }))).toEqual([]);
+  });
+});

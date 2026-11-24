@@ -41,14 +41,24 @@ faithful PASS clean · 100% match · placed · web/html
 $ npx @usefaithful/cli audit http://localhost:3000
 ```
 
-Judges a page on its own, at a phone and a desktop width, and reports each fault once.
-`--color-scheme dark` renders it with `prefers-color-scheme: dark`; `--color-scheme both` runs
-every width in each theme and labels the screens (`audit@375 dark`).
-`--stress expand,rtl,spacing` adds a pass per width for each: every visible string
-pseudo-localised to the length a translation reaches (W3C ratios, 1.3–2×), `dir="rtl"`, and
-WCAG 1.4.12 text spacing. A stress pass reports only the clipped text, overlaps and sideways
-scroll it adds, saying what caused it (`audit@375 rtl`: "in right-to-left: the page scrolls
-sideways…").
+Judges a page on its own, at a phone and a desktop width, and reports each fault once. With
+no design to compare against, **the page is its own reference**: its menus must agree with its
+headings, its values with each other, and its layout must hold at the reader's settings and
+device, not only the author's.
+
+**Each width is rendered as the device it stands for.** Under 768px is a phone, under 1024px a
+tablet: touch and no hover, so the page's `(hover: none)` and `(pointer: coarse)` rules apply,
+and a phone honours the page's viewport meta (without one it lays the page out 980px wide and
+shrinks it, which is reported). A 390px desktop window is not a phone and shows the desktop
+design. Override with `--viewports 1024x768:tablet` or `390x844:desktop`.
+
+Every audit also renders each page **with text at 200%** (WCAG 1.4.4) and **at 320px wide**
+(WCAG 1.4.10), reporting only the clipped text, overlaps and sideways scroll each adds: a menu
+that fits at the author's size and cuts off its last item for a reader with larger text is
+the fault no screenshot shows. `--stress` adds more passes — `expand` (every string
+pseudo-localised to a translation's length, 1.3–2×), `rtl`, `spacing` (WCAG 1.4.12) — and
+`--stress none` turns them all off. `--color-scheme dark|both` renders with
+`prefers-color-scheme` (`audit@375 dark`).
 
 - **Faults a user cannot get past:** text cut off by its box or drawn over other text, a page
   that scrolls sideways on a phone, broken images, script errors, `undefined` /
@@ -73,10 +83,23 @@ sideways…").
 - **Wording:** links named "click here", a row of "Learn more" links to different places,
   "Submit" buttons, one action under two names (Sign in / Log in), headings mixing Title Case
   and sentence case, doubled words.
+- **Navigation logic** — what no screenshot shows: one screen in the menus under two names
+  ("Marking" and "Grade entry"), one name going to two places, the menu calling this page
+  something its heading does not, a strip of a menu wider than `audit.navMax` (default 7), a
+  page with no `h1`, skipped heading levels.
+- **Consistency, with the page as its own reference:** a colour used once that is a hair
+  (ΔE < 2.5) from one the page uses everywhere, 15px text among 16px, a 6px corner among 8px,
+  a minority of buttons shaped unlike the rest. Only near-copies: an accent or a display size
+  is a choice.
+- **Left behind:** links that go nowhere (`#`, `javascript:`, a `#id` with no such id), notes
+  an agent left for later (TODO, "mock data", "(replace with …)", Your Company, 555-01xx),
+  a scaffold's title ("Vite + React + TS") or none, placeholder images and avatars.
 - **The tells of generated UI:** gradient text, coloured glow, emoji as icons, a stripe down
-  one side of a card, cards in cards, frosted glass, a pill badge above the headline, copy
-  that could describe any product. One tell is a warning; a purple brand set in Inter is not
-  flagged at all. Several strong tells together fail the page as "reads as generated".
+  a row of cards, cards in cards, frosted glass, decoration stacked on one box, a pill above
+  the headline, a label that only repeats its heading, copy that could describe any product.
+  A technique is a choice: one tell alone is a note, never a warning, and a purple brand set
+  in Inter is not flagged at all. Tells together are warnings, and several fail the page as
+  "reads as generated".
 
 `fixtures/audit/` holds a page with every fault planted and a plain, deliberate page that must
 stay clean; both are run on every test.
@@ -196,8 +219,9 @@ that proves it was done:
 ## Commands
 
 ```
-faithful verify <design> --build <url|file> [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
-faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both] [--stress expand,rtl,spacing] [--no-axe]  judge a page with no design
+faithful verify <design> --build <url|file> [--scroll 0,900] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+faithful verify                        every page in faithful.config.json "checks", in one verdict
+faithful audit <url|file> [--viewports 375x812,1024x768:tablet] [--color-scheme light|dark|both] [--stress zoom,reflow,expand,rtl,spacing|none] [--no-axe]  judge a page with no design
 faithful parity --before <a> --after <b> [--pages /,/x]  after a refactor or redesign: nothing lost
 faithful outline <design|folder>       what a design contains, in a few lines
 faithful spec <design> [--out file]    the design as a Faithful spec (for design agents to ship)
@@ -259,6 +283,43 @@ otherwise the system Chrome or Chromium; set `FAITHFUL_CHROMIUM` to choose one.
 | `@usefaithful/browser` | Rendering and extraction in Chromium |
 | `@usefaithful/adapters` | The design readers |
 | `@usefaithful/spec` | The Faithful spec types and validator |
+
+### States a page reaches, and every page at once
+
+A design is more than its first screen. `--scroll 0,900` renders the design and the build,
+scrolls both to each position, and compares them there, so a header that swaps once the hero
+has passed is checked in both states (`home@1440 scrolled 900`). List the pages a project
+verifies once in `faithful.config.json`, and a bare `faithful verify` re-checks all of them
+in one verdict — after every change, not only the one the page was built in:
+
+```json
+{ "checks": [
+  { "name": "home", "design": "design/Main.dc.html", "build": "http://localhost:8099/", "viewports": "1440x900,390x844", "scroll": "0,900" }
+] }
+```
+
+## Used on a real redesign
+
+Faithful checked MAM Academy's public-site redesign (six pages from a Claude Design handoff,
+ported to a PHP site, November 2026). The old homepage scored 21% against the design; the
+new pages reached 78–83%, then PASS once the intended differences were declared. It caught
+18 of 18 faults planted in the real build and stayed quiet on a 2px nudge; `parity` found every
+destination the redesign dropped (a payment page, the blog, an applicant checklist), and the
+team restored them. It found two real faults on the way: a 17px cookie-notice link and a
+question counter moved 38–129px.
+
+What it missed is in this release: a nav that wrapped and cut off its last button at 175%
+text (now the default 200% pass), menus listing one screen under two names (navigation
+logic), a footer's logo carried 400px down reported as missing and extra (now paired with its
+neighbours), and a header changed by hand two days after the pages passed, never re-verified
+and only visible after scrolling (`checks` and `--scroll`).
+
+## How it was made
+
+Faithful was written entirely by an AI coding agent (Claude, Anthropic), directed, reviewed
+and owned by Afrovanguard. That is why every check ships with a test that fails without it,
+why each was broken on purpose before it was trusted, and why its limits are written down
+(`HANDOFF.md`) rather than left for you to find. Judge it by what it catches on your pages.
 
 ## Contributing
 

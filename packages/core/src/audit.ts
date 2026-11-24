@@ -17,7 +17,7 @@
  * the tells.
  */
 import type { AuditFacts } from './audit-facts.js';
-import { contrastRatio, type Rgba, toHex } from './color.js';
+import { contrastRatio, deltaE, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
 import type { Finding, Kind, Severity } from './findings.js';
 
@@ -139,6 +139,12 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   const leftover = f.texts.find((t) => AGENT_LEFTOVERS.test(t.text) && !UNRENDERED.test(t.text.trim()));
   if (leftover)
     add('placeholder', 'error', `text left for later is on the page: "${leftover.text.slice(0, 50)}"`, leftover.sel);
+  if (f.doc?.viewportMeta === false && f.device === 'phone')
+    add(
+      'readability',
+      'error',
+      'no <meta name="viewport">: a phone lays this page out 980px wide and shrinks it to fit, so every word is a third of its size',
+    );
   if (f.doc) {
     if (!f.doc.title)
       add('placeholder', 'warn', 'the page has no <title>: its tab, bookmark and search result are blank');
@@ -299,6 +305,9 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
 
   // ── Navigation and structure: the menu's LOGIC, which no amount of looking at pixels finds ──
   navLogic(f, o.navMax ?? 7, add);
+
+  // ── Consistency: with no design, the page is its own reference ──
+  consistency(f, add);
 
   // ── Tells ─────────────────────────────────────────────────────────────────────────
   /*
@@ -507,6 +516,70 @@ function axeFindings(
       review[0]?.sel || undefined,
     );
   }
+}
+
+/**
+ * The page against itself (no design needed): a value used once or twice beside a near-copy
+ * the page uses everywhere is a slip, not a decision — a second blue 1.8 ΔE from the brand's,
+ * 15px text among 16px, a 6px corner among 8px ones, one button shaped unlike the rest. Only
+ * NEAR copies are reported: a genuinely different value (an accent, a display size) is a choice.
+ * After Project Wallace's "unique values" drift and Dembrandt's token clustering, made into
+ * findings with both values and their counts.
+ */
+function consistency(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
+  const p = f.palette;
+  if (!p) return;
+  const out: string[] = [];
+  const near = <T>(xs: [T, number][], close: (a: T, b: T) => number | null, show: (v: T) => string, what: string) => {
+    for (const [rare, rn] of xs) {
+      if (rn > 2) continue;
+      for (const [common, cn] of xs) {
+        if (common === rare || cn < Math.max(3, rn * 3)) continue;
+        const d = close(rare, common);
+        if (d === null) continue;
+        out.push(
+          `${what} ${show(rare)} (×${rn}) is a near-copy of ${show(common)} (×${cn})${d ? `, ΔE ${d.toFixed(1)}` : ''}`,
+        );
+        break;
+      }
+      if (out.length >= 4) return;
+    }
+  };
+  near(
+    p.colors,
+    (a, b) => {
+      const d = deltaE(a, b);
+      return d !== null && d > 0.3 && d < 2.5 ? d : null;
+    },
+    (v) => v,
+    'colour',
+  );
+  near(
+    p.sizes,
+    (a, b) => (a !== b && Math.abs(a - b) <= 1 ? 0 : null),
+    (v) => `${v}px`,
+    'text size',
+  );
+  near(
+    p.radii,
+    (a, b) => (a !== b && Math.abs(a - b) <= 2 ? 0 : null),
+    (v) => `${v}px`,
+    'corner radius',
+  );
+  // Buttons: the corner is the shape. A minority shaped unlike the rest is one design, twice.
+  const radii = new Map<number, typeof p.buttons>();
+  for (const b of p.buttons) radii.set(b.radius, [...(radii.get(b.radius) ?? []), b]);
+  if (p.buttons.length >= 4 && radii.size > 1) {
+    const [main, ...others] = [...radii].sort((a, b) => b[1].length - a[1].length);
+    const odd = others.flatMap(([, bs]) => bs);
+    if (main && main[1].length >= 2 * odd.length) {
+      const r = (x: number) => (x === 999 ? 'pill' : `${x}px`);
+      out.push(
+        `${odd.length} of ${p.buttons.length} buttons are shaped differently (${[...new Set(odd.map((b) => r(b.radius)))].join(', ')} corners, the rest ${r(main[0])}), e.g. "${odd[0]?.text}"`,
+      );
+    }
+  }
+  for (const d of out.slice(0, 4)) add('consistency', 'warn', d);
 }
 
 /** A menu entry's name as a reader compares it: case, spacing, badges and counts aside. */

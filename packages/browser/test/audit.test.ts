@@ -96,7 +96,7 @@ describe('axe-core inside audit', () => {
   const GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==';
   // Four faults only axe sees: a field with no label, an image with no alt, a button with no
   // name (big enough that Faithful's own target check has nothing to say), no html lang.
-  const FAULTY = `<!doctype html><html><head><title>Plots</title><style>body{font:17px/1.5 Georgia;margin:20px;color:#111;background:#fff}button{width:44px;height:44px}</style></head><body><main><h1>Twelve plots free</h1><p>Apply before May.</p><img src="${GIF}" width="40" height="40"><form><input name="plot"><button></button></form></main></body></html>`;
+  const FAULTY = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plots</title><style>body{font:17px/1.5 Georgia;margin:20px;color:#111;background:#fff}button{width:44px;height:44px}</style></head><body><main><h1>Twelve plots free</h1><p>Apply before May.</p><img src="${GIF}" width="40" height="40"><form><input name="plot"><button></button></form></main></body></html>`;
   const vps = [
     { width: 375, height: 812 },
     { width: 1440, height: 900 },
@@ -131,7 +131,7 @@ describe('axe-core inside audit', () => {
 
   it('what axe cannot decide is one note, never a pass and never a fault', async () => {
     const f = await audited(
-      '<!doctype html><html lang="en"><head><title>t</title></head><body><main><p aria-describedby="nowhere">Plots</p><video controls width="200" height="100"></video></main></body></html>',
+      '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title></head><body><main><p aria-describedby="nowhere">Plots</p><video controls width="200" height="100"></video></main></body></html>',
     );
     expect(f.map((x) => `${x.severity} ${x.kind}`)).toEqual(['info a11y']);
     expect(f[0]?.detail).toBe(
@@ -159,7 +159,7 @@ describe('axe-core inside audit', () => {
 describe('audit probe: contrast as drawn (WCAG 1.4.3)', () => {
   const vp = { width: 1024, height: 768 };
   const page = (body: string, css = '') =>
-    `<!doctype html><html lang="en"><head><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px;background:#fff;color:#000}${css}</style></head><body><main>${body}</main></body></html>`;
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px;background:#fff;color:#000}${css}</style></head><body><main>${body}</main></body></html>`;
   const colours = async (body: string, css = '', colorScheme: 'light' | 'dark' = 'light') => {
     const f = await r.audit({ html: page(body, css) }, vp, { colorScheme });
     const by = Object.fromEntries(
@@ -238,7 +238,7 @@ describe('audit probe: contrast as drawn (WCAG 1.4.3)', () => {
 describe('audit probe: edge cases measured as a person would', () => {
   const vp = { width: 1024, height: 768 };
   const doc = (body: string, css = '') =>
-    `<!doctype html><html lang="en"><head><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px}${css}</style></head><body><main><h1>Title</h1>${body}</main></body></html>`;
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px}${css}</style></head><body><main><h1>Title</h1>${body}</main></body></html>`;
   const facts = (body: string, css = '') => r.audit({ html: doc(body, css) }, vp);
 
   it('a corner badge over the empty end of a full-width heading is no overlap; words on words still are', async () => {
@@ -320,7 +320,7 @@ describe('audit probe: edge cases measured as a person would', () => {
 describe('audit --stress: i18n and resilience passes', () => {
   const vp = { width: 375, height: 812 };
   const doc = (body: string, css = '', html = '<html lang="en">') =>
-    `<!doctype html>${html}<head><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}${css}</style></head><body>${body}</body></html>`;
+    `<!doctype html>${html}<head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}${css}</style></head><body>${body}</body></html>`;
   /** What the stress pass adds over the normal one, as the CLI reports it. */
   const added = async (html: string, mode: 'expand' | 'rtl' | 'spacing') => {
     const normal = scoreAudit(await r.audit({ html }, vp), 'n');
@@ -443,12 +443,12 @@ describe('audit --stress: i18n and resilience passes', () => {
 describe('enlarged text and 320px reflow (MAM Academy, Nov 2026)', () => {
   // A desktop bar sized for its words at the author's text size: one row, no room to spare,
   // its overflow hidden. At 200% text the last entry is cut off; at the author's size it is not.
-  const BAR = `<!doctype html><html lang="en"><head><title>Academy</title><style>body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}
+  const BAR = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academy</title><style>body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}
 nav{height:48px;overflow:hidden;white-space:nowrap}nav a{display:inline-block;padding:12px 10px;color:#123}main{padding:16px}</style></head>
 <body><nav aria-label="Main"><a href="/a">Programmes</a><a href="/b">About us</a><a href="/c">Life at MAM</a><a href="/d">Auditer</a><a href="/apply">Apply now</a></nav>
 <main><h1>Academy</h1><p>Short and plain.</p></main></body></html>`;
   // 340px of fixed width: fine at 375, a sideways scroll at 320.
-  const WIDE = `<!doctype html><html lang="en"><head><title>Academy</title><style>body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}.card{width:340px;margin:0 auto}</style></head>
+  const WIDE = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Academy</title><style>body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}.card{width:340px;margin:0 auto}</style></head>
 <body><main><h1>Academy</h1><div class="card"><p>Short and plain.</p></div></main></body></html>`;
   const pass = async (html: string, vp: { width: number; height: number }, stress: 'zoom' | 'reflow') => {
     const normal = scoreAudit(await r.audit({ html, baseDir: FIX }, vp, {}), 's');
@@ -481,7 +481,7 @@ nav{height:48px;overflow:hidden;white-space:nowrap}nav a{display:inline-block;pa
 
 describe('tells, measured with restraint (after MengTo)', () => {
   const page = (body: string) =>
-    `<!doctype html><html lang="en"><head><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title><style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}
 .card{border-radius:8px;padding:16px;width:200px;height:80px;background:#f6f6f6}.stripe{border-left:4px solid #2563eb}
 .hero{width:400px;height:160px;border-radius:16px;background:linear-gradient(135deg,#7c3aed,#2563eb);box-shadow:0 0 40px rgba(124,58,237,.6);border:1px solid rgba(37,99,235,.8)}
 .eyebrow{font-size:12px}</style></head><body><main>${body}</main></body></html>`;
@@ -520,11 +520,29 @@ describe('tells, measured with restraint (after MengTo)', () => {
 
 describe('dead links and the document title, measured', () => {
   it('#, javascript: and a #id with no such id are dead; a skip link to a real id is not', async () => {
-    const html = `<!doctype html><html lang="en"><head><title>Plots · Hackney Growers</title></head><body>
+    const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plots · Hackney Growers</title></head><body>
 <a href="#main">Skip to content</a><a href="#">Read more</a><a href="javascript:void(0)">Open</a><a href="#faq">FAQ</a><a href="/apply">Apply</a>
 <main id="main"><h1>Plots</h1></main></body></html>`;
     const f = await r.audit({ html, baseDir: FIX }, { width: 1440, height: 900 }, {});
     expect(f.deadLinks?.map((d) => d.href)).toEqual(['#', 'javascript:void(0)', '#faq']);
-    expect(f.doc).toEqual({ title: 'Plots · Hackney Growers', description: '' });
+    expect(f.doc).toEqual({ title: 'Plots · Hackney Growers', description: '', viewportMeta: true });
+  }, 60_000);
+});
+
+describe('consistency, measured on a real page', () => {
+  it("one button a hair off the brand blue and shaped unlike the rest is reported; the page's own system is not", async () => {
+    const btn = (bg: string, r: number, t: string) =>
+      `<a href="/${t}" style="display:inline-block;padding:12px 20px;margin:4px;border-radius:${r}px;background:${bg};color:#fff">${t}</a>`;
+    const body =
+      ['Plots', 'Rules', 'Fees', 'Join', 'Help'].map((t) => btn('#2563eb', 10, t)).join('') +
+      btn('#2765ea', 4, 'Donate');
+    const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Growers</title><style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}</style></head><body><main><h1>Growers</h1><p>${body}</p></main></body></html>`;
+    const f = scoreAudit(await r.audit({ html, baseDir: FIX }, { width: 1440, height: 900 }, {}), 's').findings.filter(
+      (x) => x.kind === 'consistency',
+    );
+    expect(f.map((x) => x.detail)).toEqual([
+      expect.stringMatching(/^colour #2765ea \(×1\) is a near-copy of #2563eb \(×5\)/),
+      '1 of 6 buttons are shaped differently (4px corners, the rest 10px), e.g. "Donate"',
+    ]);
   }, 60_000);
 });

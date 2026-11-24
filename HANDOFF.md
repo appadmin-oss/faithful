@@ -10,9 +10,10 @@ what to do next, in order.
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
 - **Health:** `pnpm install && pnpm check` → lint clean, build, 256 tests, selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
-- **Not published to npm.** The scope `@faithful` must be created on npmjs.com first. The
-  unscoped name `faithful` belongs to an unrelated package: never tell anyone to run
-  `npx faithful`; it is always `npx @usefaithful/cli` (a test enforces this in every skill).
+- **npm scope: `@usefaithful`** (24 Nov 2026). `@faithful` belongs to someone else (it holds
+  `table-filter-sortt`). Every package is `@usefaithful/*`; the command is
+  `npx @usefaithful/cli`. The unscoped `faithful` is an unrelated package: never tell anyone to
+  run `npx faithful` (a test enforces this in every skill). Not published yet — see "Publishing".
 - **Suggested GitHub description:** "Prove UI work is right before calling it done. Verify a
   build against its design, audit any page for layout faults and AI-design slop, and check a
   refactor or redesign kept every feature. CLI, MCP server and Agent Skills for coding
@@ -35,7 +36,47 @@ what to do next, in order.
 Every detector was broken on purpose and its test watched to fail. Keep doing that
 (`AGENTS.md`). Exit codes: 0 pass, 1 fail, 2 bad call.
 
-## Resume here (20 Nov 2026, end of session)
+## Resume here (24 Nov 2026)
+
+Done on `afv/brave-faraday-pdlh7o` (commits authored as appadmin-oss), each check broken on
+purpose and its test watched to fail; `pnpm check` green:
+
+- **From MAM Academy's redesign** (its HANDOFF §4z13–4z20): navigation logic (kinds
+  `navigation`, `heading`; `audit.navMax`); `--stress zoom` (text 200%) and `reflow` (320px),
+  both on by default, `--stress none` off; verify pairs a box carried along by its neighbours
+  (`match.ts` step 5); `verify --scroll`; `faithful.config.json` `checks` and a bare
+  `faithful verify`.
+- **The right device**: `Viewport.device` / `deviceOf()` (spec): under 768 phone, under 1024
+  tablet, `WxH:phone|tablet|desktop` overrides. Phones and tablets render with touch and no
+  hover; a deployed phone page (build, audit) also with `isMobile`, so a page with no viewport
+  meta is laid out ~980px (an error). Design boards never get the 980 fallback.
+- **From the peer audit** (MengTo, Hallmark, slop-detect, jakubkrehel, tgkjuanda): one tell
+  alone is a note; decoration stacked on one box; a label repeating its heading; side stripes
+  only down a row of 3+ cards; dead links (kind `dead`); agent leftovers; scaffold titles;
+  placeholder avatars. Hallmark's "overrule on the record" already existed (deviations).
+- **The page as its own reference** (kind `consistency`): near-copy colours, sizes, radii;
+  odd-shaped buttons.
+- Research for all of it: `docs/research/reference-free-and-motion-2026-11.md`.
+
+Next: motion (getAnimations + `page.clock` stepping, spring fitting), cross-viewport layout
+consistency (ReDeCheck), keyboard/focus pass, site crawl, `faithful approve`, a published
+precision/recall benchmark — in the order ranked at the end of that research file.
+
+## Publishing
+
+1. On npmjs.com, create the organisation `usefaithful` (avatar menu → "Add Organization",
+   free for public packages). Organisation settings live at
+   `npmjs.com/settings/usefaithful/…`, reached from the avatar menu.
+2. The first publish is by hand, because npm's trusted publishing is set **per package**, on
+   a package that already exists: `npm login`, then from the repository root
+   `pnpm install && pnpm check && pnpm -r publish --access public` (pnpm, not npm: it rewrites
+   `workspace:*` to real versions).
+3. Then, for each of the six packages: npmjs.com → the package → Settings → Trusted
+   Publisher → GitHub Actions, repository `appadmin-oss/faithful`, workflow `release.yml`.
+   From then on a GitHub release publishes with provenance and no stored token
+   (`.github/workflows/release.yml`).
+
+## Earlier: resume note of 20 Nov 2026
 
 Done and pushed: audit fixes, 14 skills, contrast + `--color-scheme`, `--stress`, axe-core,
 canvas/design-system readers, `verify --screen`, TypeScript 7. Tests: 256, all green.

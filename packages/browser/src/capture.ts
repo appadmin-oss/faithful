@@ -8,13 +8,26 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { type AuditFacts, FILE_ENTRY_DIR, FILE_ORIGIN, type Rendered, type RenderTarget } from '@usefaithful/core';
-import type { DesignElement, Region, Screen, Viewport } from '@usefaithful/spec';
+import { type DesignElement, deviceOf, type Region, type Screen, type Viewport } from '@usefaithful/spec';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { auditProbe } from './audit-probe.js';
 import { AXE_TAGS, axeSource, runAxe } from './axe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
 import { expandText, setRtl, setSpacing, zoomText } from './stress.js';
+
+/**
+ * The device a viewport stands for, as the browser must emulate it (measured in Chromium):
+ * a phone or tablet has touch and no hover, so `(hover: none)` and `(pointer: coarse)` rules
+ * apply; a 390px window without them is a narrow DESKTOP and shows the desktop design. A phone
+ * rendering a deployed page (`asPage`) also honours its viewport meta tag, and without one lays
+ * the page out at 980px, as a real phone does. A design board is not a deployed page, so it
+ * never gets that fallback.
+ */
+export function deviceContext(v: Viewport, asPage: boolean): { hasTouch: boolean; isMobile: boolean } {
+  const d = deviceOf(v);
+  return { hasTouch: d !== 'desktop', isMobile: asPage && d === 'phone' };
+}
 
 /** `faithful audit --stress`: what the page is put through before it is measured. */
 export type Stress = 'expand' | 'rtl' | 'spacing' | 'zoom' | 'reflow';
@@ -38,6 +51,8 @@ export interface CaptureOptions {
    * page coordinates, so a design and a build scrolled alike compare as at the top.
    */
   scrollY?: number;
+  /** A deployed page rather than a design board: a phone honours (or lacks) its viewport meta. */
+  asPage?: boolean;
 }
 
 const FREEZE = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}`;
@@ -140,6 +155,7 @@ export class Renderer {
   ): Promise<Rendered> {
     const ctx: BrowserContext = await this.browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
+      ...deviceContext(viewport, opts.asPage === true),
       deviceScaleFactor: 1,
       reducedMotion: 'reduce',
       colorScheme: opts.colorScheme ?? 'light',
@@ -195,6 +211,8 @@ export class Renderer {
   ): Promise<AuditFacts> {
     const ctx: BrowserContext = await this.browser.newContext({
       viewport: { width: viewport.width, height: viewport.height },
+      // An audited page is a deployed page: a phone honours its viewport meta, or lacks one.
+      ...deviceContext(viewport, true),
       deviceScaleFactor: 1,
       reducedMotion: 'reduce',
       colorScheme: opts.colorScheme ?? 'light',
@@ -256,6 +274,7 @@ export class Renderer {
           'running axe-core',
         ).catch((e: Error) => ({ error: e.message || String(e) }));
       // The private origin's own favicon probe is not the page's fault.
+      facts.device = deviceOf(viewport);
       facts.runtime = {
         errors,
         failed: failed.filter((f) => !/\/favicon\.ico$/.test(f.url)),

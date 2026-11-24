@@ -75,7 +75,7 @@ describe('faithful (bin)', () => {
     const d = tmp();
     writeFileSync(
       join(d, 'i18n.html'),
-      '<!doctype html><html lang="en"><head><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}.save{width:96px;white-space:nowrap;overflow:hidden;padding:12px 0;background:#1d4ed8;color:#fff;border:0;font:16px Georgia}</style></head><body><main><p>Your changes are kept for a week.</p><button class="save">Save draft</button></main></body></html>',
+      '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>t</title><style>body{margin:0;font:16px/1.5 Georgia;background:#fff;color:#111}main{padding:20px}.save{width:96px;white-space:nowrap;overflow:hidden;padding:12px 0;background:#1d4ed8;color:#fff;border:0;font:16px Georgia}</style></head><body><main><p>Your changes are kept for a week.</p><button class="save">Save draft</button></main></body></html>',
     );
     expect(run(d, 'audit', 'i18n.html', '--viewports', '375x812', '--stress', 'none').code).toBe(0);
     const r = run(
@@ -237,5 +237,43 @@ body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}
     ).toEqual(['home · design@1280', 'home · design@1280 scrolled 900']);
     writeFileSync(join(d, 'faithful.config.json'), JSON.stringify({ checks: [] }));
     expect(run(d, 'verify').code).toBe(2);
+  }, 180_000);
+});
+
+describe('the right design for the device', () => {
+  // The design's phone variant says "Tap", its desktop "Hover" — chosen by the pointer, not the
+  // width. The build forgot the phone rule. A 390px desktop window would show both as "Hover".
+  const page = (
+    touchRule: boolean,
+  ) => `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lessons</title><style>
+body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}main{padding:24px}.tap{display:none}
+${touchRule ? '@media (hover: none){.tap{display:block}.hover{display:none}}' : ''}</style></head><body><main><h1>Lessons</h1>
+<p class="hover">Hover over a lesson to preview it.</p><p class="tap">Tap a lesson to open it.</p></main></body></html>`;
+
+  it('a phone is rendered as a phone: touch rules apply, so a build missing them fails there and only there', () => {
+    const d = tmp();
+    writeFileSync(join(d, 'design.html'), page(true));
+    writeFileSync(join(d, 'build.html'), page(false));
+    const phone = run(d, 'verify', 'design.html', '--build', 'build.html', '--viewports', '390x844');
+    expect(phone.code).toBe(1);
+    expect(phone.out).toMatch(/"Tap a lesson to open it\."/);
+    expect(run(d, 'verify', 'design.html', '--build', 'build.html', '--viewports', '1440x900').code).toBe(0);
+    // A width that is a phone by default can be declared a desktop window, and then it is one.
+    expect(run(d, 'verify', 'design.html', '--build', 'build.html', '--viewports', '390x844:desktop').code).toBe(0);
+    expect(run(d, 'verify', 'design.html', '--build', 'build.html', '--viewports', '390x844:watch').code).toBe(2);
+  }, 180_000);
+
+  it('a page with no viewport meta is what a phone shows shrunk: an error on a phone, nothing on a desktop', () => {
+    const d = tmp();
+    writeFileSync(
+      join(d, 'old.html'),
+      page(true).replace('<meta name="viewport" content="width=device-width,initial-scale=1">', ''),
+    );
+    const phone = run(d, 'audit', 'old.html', '--viewports', '375x812', '--stress', 'none');
+    expect(phone.code).toBe(1);
+    expect(phone.out).toMatch(/no <meta name="viewport">/);
+    // And it was laid out as a phone lays it out: 980px wide, not the 375 asked for.
+    expect(JSON.parse(readFileSync(join(d, '.faithful/last.json'), 'utf8')).screens[0].viewport).toMatch(/^98\dx/);
+    expect(run(d, 'audit', 'old.html', '--viewports', '1440x900', '--stress', 'none').out).not.toMatch(/viewport/);
   }, 180_000);
 });
