@@ -777,3 +777,22 @@ describe('data-faithful-ignore', () => {
     expect(await overlaps('data-faithful-ignore')).toEqual([]);
   }, 60_000);
 });
+
+describe('content laid out but never painted', () => {
+  it('a closed <details> group is not drawn over the next group; open, its fields are judged as they lie', async () => {
+    // As a settings form groups them: closed groups keep their fields' boxes (Chromium hides the
+    // content with content-visibility: hidden), positioned where the next group's heading is
+    // painted. Measured as visible text, every label "was drawn over" the next heading.
+    const group = (name: string, open: string) =>
+      `<details${open}><summary>${name}</summary><div class="g"><label><span>${name} base price</span><input></label><label><span>${name} discount</span><input></label></div></details>`;
+    const page = (open: string) =>
+      `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cfg</title><style>body{font:16px/1.5 Georgia;margin:20px}.g{display:grid;grid-template-columns:1fr 1fr;gap:12px}label{display:block}</style></head><body><main><h1>Settings</h1>${['Certificate', 'Diploma', 'Store', 'Invoice'].map((n) => group(n, open)).join('')}</main></body></html>`;
+    const errors = async (open: string) =>
+      scoreAudit(
+        await r.audit({ html: page(open), baseDir: FIX }, { width: 1024, height: 800 }, { axe: false }),
+        's',
+      ).findings.filter((x) => x.severity === 'error');
+    expect(await errors('')).toEqual([]);
+    expect(await errors(' open')).toEqual([]);
+  }, 60_000);
+});

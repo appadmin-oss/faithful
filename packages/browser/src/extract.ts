@@ -105,8 +105,11 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
     return id;
   };
 
-  const visible = (_el: Element, cs: CSSStyleDeclaration): boolean => {
+  const visible = (el: Element, cs: CSSStyleDeclaration): boolean => {
     if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') return false;
+    // Laid out but never painted (a closed <details>, content-visibility: hidden): not on screen.
+    const cv = (el as Element & { checkVisibility?: () => boolean }).checkVisibility;
+    if (typeof cv === 'function' && !cv.call(el)) return false;
     if (Number.parseFloat(cs.opacity) === 0) return false;
     return true;
   };

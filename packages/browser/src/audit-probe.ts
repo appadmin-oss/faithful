@@ -46,9 +46,16 @@ export function auditProbe(): AuditFacts {
     const s = t.replace(/\s+/g, ' ').trim();
     return s.length > n ? `${s.slice(0, n - 1)}…` : s;
   };
+  // Skipped content is laid out but never painted: a closed <details> (Chromium hides it with
+  // content-visibility: hidden, so its children keep boxes), or any content-visibility subtree.
+  // The browser's own checkVisibility() knows; a box with a size does not.
+  const paintedNow = (e: Element) =>
+    typeof (e as Element & { checkVisibility?: () => boolean }).checkVisibility !== 'function' ||
+    (e as Element & { checkVisibility: () => boolean }).checkVisibility();
   const shown = (e: Element) => {
     const s = cs(e);
     if (s.display === 'none' || s.visibility === 'hidden' || s.visibility === 'collapse') return false;
+    if (!paintedNow(e)) return false;
     const r = e.getBoundingClientRect();
     return r.width > 1 && r.height > 1;
   };
