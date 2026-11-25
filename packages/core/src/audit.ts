@@ -19,6 +19,7 @@
 import type { AuditFacts } from './audit-facts.js';
 import { contrastRatio, deltaE, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
+import { fitSpacingGrid, fitTypeScale, hierarchyInversions, nearMissEdges } from './design-sense.js';
 import type { Finding, Kind, Severity } from './findings.js';
 import { MOVEMENT } from './motion.js';
 import { readNarration } from './narration.js';
@@ -338,6 +339,9 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   // ── Consistency: with no design, the page is its own reference ──
   consistency(f, add);
 
+  // ── Design sense: the page's own system, fitted, and what misses it ──
+  designSense(f, add);
+
   // ── Motion the reader asked to be spared ──
   reducedMotion(f, add);
 
@@ -626,6 +630,52 @@ function consistency(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?:
  * not enough to pass: what the page did not gate keeps running (Edge's DevTools guide on
  * reduced motion), so this reads what actually remains. WCAG 2.3.3; Apple HIG "Reduce Motion".
  */
+/**
+ * The system the page follows (type scale, spacing grid, columns, heading order), fitted from
+ * the page itself (design-sense.ts), and every value that misses it with the value that fits.
+ * One note states the system, so an agent adding to the page uses its numbers, not new ones.
+ */
+function designSense(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
+  const px = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}px`;
+  const said: string[] = [];
+  const scale = f.palette ? fitTypeScale(f.palette.sizes) : null;
+  if (scale) {
+    said.push(`type on a ${scale.ratio} (${scale.name}) scale from ${px(scale.base)}`);
+    for (const o of scale.off.slice(0, 3))
+      add(
+        'type-scale',
+        'info',
+        `${px(o.size)} text (×${o.n}) is off the ${scale.ratio} (${scale.name}) scale this page sets from ${px(scale.base)}: use ${px(o.below)} or ${px(o.above)}`,
+      );
+  }
+  const grid = f.spacing ? fitSpacingGrid(f.spacing) : null;
+  if (grid) {
+    said.push(`spacing on a ${grid.unit}px grid (${Math.round(grid.coverage * 100)}% of it)`);
+    for (const o of grid.off.slice(0, 3))
+      add(
+        'consistency',
+        'info',
+        `${px(o.value)} spacing (×${o.n}) is off the ${grid.unit}px grid this page uses for ${Math.round(grid.coverage * 100)}% of its spacing: use ${px(o.below)} or ${px(o.above)}`,
+        o.sel,
+      );
+  }
+  for (const m of nearMissEdges(f.edges ?? []).slice(0, 3))
+    add(
+      'consistency',
+      'warn',
+      `starts ${m.by}px ${m.x > m.to ? 'right' : 'left'} of the edge ${m.shared} elements share (x=${m.to}): align it to that edge`,
+      m.sel,
+    );
+  for (const h of hierarchyInversions(f.headings))
+    add(
+      'heading',
+      'warn',
+      `h${h.lower} is drawn larger (${px(h.lowerPx)}) than h${h.upper} (${px(h.upperPx)}): the outline a screen reader hears and the order the eye sees disagree`,
+      h.sel,
+    );
+  if (said.length) add('consistency', 'info', `the page's system: ${said.join('; ')}. New elements should use it`);
+}
+
 function reducedMotion(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
   const list = f.reducedMotion ?? [];
   const moves = (k: string | undefined) => !!k && k.split(',').some((p) => MOVEMENT.test(p.trim()));

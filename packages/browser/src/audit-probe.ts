@@ -676,7 +676,72 @@ export function auditProbe(): AuditFacts {
       sel: path(e),
       level: Number(e.tagName[1]),
       text: (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 120),
+      // A heading inside a picture of UI is part of the picture: no size, so the hierarchy
+      // check leaves it out.
+      ...(decorativeOf(e) ? {} : { size: Math.round(Number.parseFloat(cs(e).fontSize) * 2) / 2 }),
     }));
+  /*
+   * The page's own system, for design sense (core/design-sense.ts): every padding, margin and
+   * gap it sets (with how often, and one element that sets it), and the left edge of every
+   * block of text (where its columns are). Pictures of UI are left out: their spacing is a
+   * screenshot's.
+   */
+  const UA_MARGIN_EM: Record<string, number> = {
+    H1: 0.67,
+    H2: 0.83,
+    H3: 1,
+    H4: 1.33,
+    H5: 1.67,
+    H6: 2.33,
+    P: 1,
+    UL: 1,
+    OL: 1,
+    DL: 1,
+    BLOCKQUOTE: 1,
+    FIGURE: 1,
+    PRE: 1,
+  };
+  const spaceUse = new Map<number, { n: number; sel: string }>();
+  const edges: { x: number; y: number; h: number; sel: string }[] = [];
+  for (const e of all) {
+    if (!shown(e) || decorativeOf(e)) continue;
+    const st = cs(e);
+    // The browser's own default margins (h1 0.67em, p 1em…) are nobody's choice.
+    const fs = Number.parseFloat(st.fontSize) || 16;
+    const uaEm = UA_MARGIN_EM[e.tagName];
+    // Counted per element, not per side: padding:13px is one decision, not four.
+    const mine = new Set<number>();
+    for (const [v, isMargin] of [
+      [st.paddingTop, false],
+      [st.paddingRight, false],
+      [st.paddingBottom, false],
+      [st.paddingLeft, false],
+      [st.marginTop, true],
+      [st.marginBottom, true],
+      [st.rowGap, false],
+      [st.columnGap, false],
+    ] as [string, boolean][]) {
+      const n = Math.round(Number.parseFloat(v) * 2) / 2;
+      if (!(n > 2) || n > 256) continue;
+      if (isMargin && uaEm !== undefined && Math.abs(n - uaEm * fs) <= 0.6) continue;
+      if (mine.has(n)) continue;
+      mine.add(n);
+      const had = spaceUse.get(n);
+      if (had) had.n++;
+      else spaceUse.set(n, { n: 1, sel: path(e) });
+    }
+    if (
+      edges.length < 600 &&
+      ownText(e).length > 2 &&
+      !srOnly(e) &&
+      !/^inline/.test(st.display) &&
+      /^(left|start|justify)$/.test(st.textAlign)
+    ) {
+      const r = e.getBoundingClientRect();
+      edges.push({ x: r.left, y: r.top + window.scrollY, h: r.height, sel: path(e) });
+    }
+  }
+  const spacing = [...spaceUse].map(([v, u]) => [v, u.n, u.sel] as [number, number, string]);
   const fontSizes = [...new Set(leaves.map((e) => Math.round(Number.parseFloat(cs(e).fontSize) * 2) / 2))].sort(
     (a, b) => a - b,
   );
@@ -1150,6 +1215,8 @@ export function auditProbe(): AuditFacts {
     landmarks,
     headings,
     fontSizes,
+    spacing,
+    edges,
     textColors,
     contrastUnknown,
     ...(lightControls ? { lightControls } : {}),

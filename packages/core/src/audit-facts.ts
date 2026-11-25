@@ -105,7 +105,11 @@ export interface AuditFacts {
   }[];
   /** ARIA landmark roles present (banner, navigation, main, contentinfo, search, …). */
   landmarks: string[];
-  headings: { sel: string; level: number; text: string }[];
+  headings: { sel: string; level: number; text: string; size?: number }[];
+  /** Padding, margin and gap values the page sets: value, times used, one element using it. */
+  spacing?: [number, number, string][];
+  /** Left edges of blocks of left-aligned text, in page coordinates (design-sense.ts). */
+  edges?: { x: number; y: number; h: number; sel: string }[];
   fontSizes: number[];
   /**
    * Each visible text's colour and the colour behind it, both as DRAWN (alpha, background

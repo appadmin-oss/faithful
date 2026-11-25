@@ -4,6 +4,7 @@ export * from './audit.js';
 export * from './color.js';
 export * from './compare.js';
 export * from './config.js';
+export * from './design-sense.js';
 export * from './deviations.js';
 export * from './findings.js';
 export * from './geometry.js';

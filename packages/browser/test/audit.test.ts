@@ -87,8 +87,10 @@ describe('audit probe', () => {
     expect(nav.filter((d) => /2 names/.test(d))).toHaveLength(1);
   }, 90_000);
 
-  it('the clean page has nothing to report', async () => {
-    expect(await run('clean.html')).toEqual([]);
+  it('the clean page has nothing to report but the system it keeps to', async () => {
+    const f = await run('clean.html');
+    expect(f.filter((x) => !/^the page's system: /.test(x.detail))).toEqual([]);
+    expect(f.map((x) => x.detail)).toContainEqual(expect.stringMatching(/^the page's system: .*spacing on a 4px grid/));
   }, 90_000);
 });
 
@@ -719,5 +721,43 @@ describe('a layout fault judged by what it is', () => {
     expect(out).toContainEqual(
       expect.stringMatching(/^info overlap set aside as by design: .*(layered|floating label)/),
     );
+  }, 60_000);
+});
+
+describe('design sense: the page’s own system, and what misses it', () => {
+  const page = (extra: string, css = '') =>
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sys</title><style>
+body{font:16px/1.5 Georgia;margin:0;color:#111;background:#fff}main{padding:32px}h1{font-size:40px;margin:0 0 24px}h2{font-size:28px;margin:32px 0 16px}h3{font-size:20px;margin:24px 0 8px}
+p{margin:0 0 16px}.card{padding:16px;margin:0 0 24px;border:1px solid #ccc}.row{display:flex;gap:8px;padding:8px 0}${css}</style></head><body><main>
+<h1>Plans</h1><p>Choose a plan.</p><h2>Teams</h2><p>For teams of up to ten.</p><div class="card"><p>Ten seats.</p><p>Shared projects.</p></div>
+<h2>Business</h2><p>For larger teams.</p><div class="card"><p>Fifty seats.</p><p>Single sign-on.</p></div><div class="row"><p>One</p><p>Two</p></div>
+<h3>Support</h3><p>By email, every weekday.</p>${extra}</main></body></html>`;
+  const designFindings = async (html: string) =>
+    scoreAudit(await r.audit({ html, baseDir: FIX }, { width: 1024, height: 800 }, { axe: false }), 's')
+      .findings.filter((x) => /edge \d+ elements share|drawn larger|off the \d+px grid|page's system/.test(x.detail))
+      .map((x) => `${x.severity} ${x.kind} ${x.detail}`);
+
+  it('a 2px slip, an h3 drawn larger than the h2 above it and one off-grid padding are named, with the values to use', async () => {
+    const out = await designFindings(
+      page(
+        '<h3 class="big">Billing</h3><p class="slip">Invoices monthly.</p><div class="odd">Help</div>',
+        '.big{font-size:34px}.slip{margin-left:2px}.odd{padding:13px}',
+      ),
+    );
+    expect(out).toContainEqual(
+      expect.stringMatching(
+        /^warn consistency starts 2px right of the edge \d+ elements share \(x=32\): align it to that edge$/,
+      ),
+    );
+    expect(out).toContainEqual(expect.stringMatching(/^warn heading h3 is drawn larger \(\d+px\) than h2 \(28px\)/));
+    expect(out).toContainEqual(
+      expect.stringMatching(/^info consistency 13px spacing \(×\d\) is off the 8px grid .*: use 12px or 16px$/),
+    );
+    expect(out).toContainEqual(expect.stringMatching(/^info consistency the page's system: .*spacing on a 8px grid/));
+  }, 60_000);
+
+  it('the same page without them says only what its system is', async () => {
+    const out = await designFindings(page(''));
+    expect(out.filter((x) => !/page's system/.test(x))).toEqual([]);
   }, 60_000);
 });
