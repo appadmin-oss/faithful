@@ -52,7 +52,9 @@ export function auditProbe(): AuditFacts {
     const r = e.getBoundingClientRect();
     return r.width > 1 && r.height > 1;
   };
-  const ariaHidden = (e: Element) => !!e.closest('[aria-hidden="true"],[hidden],template,noscript');
+  // Not judged: hidden from everyone, or marked data-faithful-ignore by the page's author.
+  const ariaHidden = (e: Element) =>
+    !!e.closest('[aria-hidden="true"],[hidden],template,noscript,[data-faithful-ignore]');
   const opacityOf = (e: Element) => {
     let o = 1;
     for (let c: Element | null = e; c; c = c.parentElement) o *= Number.parseFloat(cs(c).opacity || '1');

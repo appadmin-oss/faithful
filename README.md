@@ -224,6 +224,20 @@ benchmark. Text enlarged *alone* to 200% (Android font scale, iOS text size) goe
 WCAG; those warnings are counted apart (3 on the known-good pages: a long word in a large
 heading wider than a phone, fixed by `overflow-wrap: anywhere`).
 
+## How it differs from visual-testing services
+
+Visual-testing services (Percy, Chromatic, UI Verify) answer **"did it change since main?"**:
+a pixel diff against a stored baseline, judged by a person or an AI model, in the cloud,
+metered per screenshot. Faithful answers **"is it right?"**: against the design file, or with
+no design against the page's own system and the standards, element by element, on your
+machine, with rules you can read and a benchmark you can run. The two are complementary; a
+baseline accepts a first build that is already wrong, and that is the case Faithful is for.
+A critical comparison, with what Faithful has taken and still lacks:
+`docs/research/ui-verify-and-the-field-2026-11.md`.
+
+Live data that should never be judged (a clock, prices, an ad slot) can be marked
+`data-faithful-ignore`; it is left out of verify and audit on both sides.
+
 ## For agents
 
 ```

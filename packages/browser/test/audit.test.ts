@@ -763,3 +763,17 @@ p{margin:0 0 16px}.card{padding:16px;margin:0 0 24px;border:1px solid #ccc}.row{
     expect(out.filter((x) => !/page's system/.test(x))).toEqual([]);
   }, 60_000);
 });
+
+describe('data-faithful-ignore', () => {
+  it('a region its author marked is not judged; the same fault outside it is', async () => {
+    const pair = (attr: string) =>
+      `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ign</title><style>body{font:16px/1.5 Georgia;margin:20px}.p{position:relative;height:40px}.p span{position:absolute;top:0;left:0}</style></head><body><main><h1>Live</h1><div class="p" ${attr}><span>Price 12.40</span><span>Updated now</span></div></main></body></html>`;
+    const overlaps = async (attr: string) =>
+      scoreAudit(
+        await r.audit({ html: pair(attr), baseDir: FIX }, { width: 1024, height: 800 }, { axe: false }),
+        's',
+      ).findings.filter((x) => x.kind === 'overlap' && x.severity === 'error');
+    expect((await overlaps('')).length).toBe(1);
+    expect(await overlaps('data-faithful-ignore')).toEqual([]);
+  }, 60_000);
+});

@@ -60,7 +60,9 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
     'header,nav,main,footer,aside,form[aria-label],section[aria-label],section[aria-labelledby],[role=banner],[role=navigation],[role=main],[role=contentinfo],[role=complementary],[role=region],[role=dialog]';
   const sx = window.scrollX;
   const sy = window.scrollY;
-  const ignored = opts.ignore.length ? Array.from(document.querySelectorAll(opts.ignore.join(','))) : [];
+  // The config's `ignore` selectors, and anything its author marked data-faithful-ignore (a
+  // clock, live prices, an ad slot): left out on both sides of a comparison.
+  const ignored = Array.from(document.querySelectorAll([...opts.ignore, '[data-faithful-ignore]'].join(',')));
   const isIgnored = (el: Element) => ignored.some((i) => i === el || i.contains(el));
 
   const ids = new Map<Element, string>();

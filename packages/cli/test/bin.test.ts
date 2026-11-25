@@ -362,3 +362,14 @@ describe('--version', () => {
     }
   });
 });
+
+describe('data-faithful-ignore in verify', () => {
+  it('a region marked on both sides (a clock, live data) is left out of the comparison', () => {
+    const d = tmp();
+    const page = (time: string) =>
+      `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Desk</title><style>body{font:16px/1.5 Georgia;margin:24px}</style></head><body><main><h1>Front desk</h1><p data-faithful-ignore>${time}</p><p>Open until six.</p></main></body></html>`;
+    writeFileSync(join(d, 'design.html'), page('Updated 09:00'));
+    writeFileSync(join(d, 'build.html'), page('Updated 14:37, just now'));
+    expect(run(d, 'verify', 'design.html', '--build', 'build.html', '--viewports', '1024x768').code).toBe(0);
+  }, 120_000);
+});

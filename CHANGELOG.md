@@ -31,6 +31,7 @@ The first release, `0.1.0`, will be cut from this.
   route.
 - `outline`, `spec`, `explain`, `guard`, `selftest`, `formats`, `doctor`, `init`, `--version`.
 - `@usefaithful/mcp`: the same checks as an MCP server; fourteen Agent Skills.
+- `data-faithful-ignore`: a region its author marks is left out of verify and audit.
 - `pnpm bench`: a labelled benchmark (planted faults and known-good pages), in the test suite.
 
 [Unreleased]: https://github.com/appadmin-oss/faithful/commits/main

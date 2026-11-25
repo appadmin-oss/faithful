@@ -8,7 +8,7 @@ what to do next, in order.
 
 - **Code:** `main` on GitHub at [appadmin-oss/faithful](https://github.com/appadmin-oss/faithful).
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
-- **Health:** `pnpm install && pnpm check` → lint clean, build, 352 tests (the labelled benchmark among them), selftest — all green.
+- **Health:** `pnpm install && pnpm check` → lint clean, build, 355 tests (the labelled benchmark among them), selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **npm scope: `@usefaithful`** (24 Nov 2026). `@faithful` belongs to someone else (it holds
   `table-filter-sortt`). Every package is `@usefaithful/*`; the command is
@@ -88,7 +88,15 @@ faithful smarter, mathematical and creative"):
   0 false alarms, 5/5 clean. A regression guard written by the same hands, not independent.
 - **Physics**: the recorder now reads an element at its first style write.
 
-Next: an independent labelled set (Krebs' ai-design-checker, 165 sites, MIT); hover/press/
+- **Standards**: `--version`; coverage measured honestly and enforced as a ratchet (85/72);
+  actions pinned to commits; Dependabot; CHANGELOG; issue templates; macOS/Windows job
+  (non-blocking until green). `data-faithful-ignore` (from the UI Verify comparison,
+  `docs/research/ui-verify-and-the-field-2026-11.md`).
+
+Next: affected pages for a changed component (UI Verify's best idea, our clearest gap);
+re-sample a timing-prone layout fault before reporting it; a local baseline mode for parity;
+a PR-ready check summary; an independent labelled set (Krebs' ai-design-checker, 165 sites,
+MIT); hover/press/
 scroll motion (the recorder watches entry only), cross-viewport layout
 consistency (ReDeCheck), keyboard/focus pass, site crawl, `faithful approve`, a published
 precision/recall benchmark — in the order ranked at the end of that research file.
