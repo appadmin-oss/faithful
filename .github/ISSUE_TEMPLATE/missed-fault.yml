@@ -1,0 +1,23 @@
+name: Missed fault
+description: A real fault Faithful did not report.
+labels: [missed-fault]
+body:
+  - type: input
+    id: command
+    attributes:
+      label: The command
+      placeholder: npx @usefaithful/cli verify design.html --build http://localhost:3000
+    validations:
+      required: true
+  - type: textarea
+    id: fault
+    attributes:
+      label: The fault
+      description: What is wrong, where, and how a reader meets it. A screenshot or a minimal page helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: output of `npx @usefaithful/cli --version`

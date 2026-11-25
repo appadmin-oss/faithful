@@ -348,6 +348,17 @@ body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}main{paddin
     expect(run(d, 'verify', 'design.html', '--build', 'still.html', ...vp).code).toBe(0);
     const still = run(d, 'verify', 'design.html', '--build', 'still.html', ...vp, '--physics');
     expect(still.code).toBe(1);
-    expect(still.out).toMatch(/E motion: on entry the design moves up (?:3[89]|40)px over \d+ms with a spring/);
+    expect(still.out).toMatch(/E motion: on entry the design moves up 40px over \d+ms with a spring/);
   }, 240_000);
+});
+
+describe('--version', () => {
+  it('prints the CLI version alone, exit 0, under every spelling', () => {
+    const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8')) as { version: string };
+    for (const flag of ['--version', '-v', 'version']) {
+      const r = run(tmp(), flag);
+      expect(r.code).toBe(0);
+      expect(r.out.trim()).toBe(pkg.version);
+    }
+  });
 });

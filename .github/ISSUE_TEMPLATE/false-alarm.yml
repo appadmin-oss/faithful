@@ -1,0 +1,33 @@
+name: False alarm
+description: Faithful reported something that is not a fault.
+labels: [false-alarm]
+body:
+  - type: markdown
+    attributes:
+      value: A verifier that reports correct code gets switched off. Thank you for telling us.
+  - type: input
+    id: command
+    attributes:
+      label: The command
+      placeholder: npx @usefaithful/cli audit https://example.com
+    validations:
+      required: true
+  - type: textarea
+    id: finding
+    attributes:
+      label: The finding, as printed
+      description: Paste the line (F3 W overlap ...) and `faithful explain F3` if you can.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is not a fault
+      description: What a reader actually sees there. A public URL or a minimal HTML page helps most.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: output of `npx @usefaithful/cli --version`

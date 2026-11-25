@@ -52,8 +52,10 @@ export function recordPhysics(): void {
       /* no document yet: the frame loop still finds declared animations */
     }
   };
-  if (document.documentElement) watch();
-  else document.addEventListener('readystatechange', watch, { once: true });
+  // Observed on the Document itself, at once: waiting for documentElement (or readystatechange)
+  // let an inline script at the end of <body> write its start position unseen, and every
+  // distance then read one step short.
+  watch();
   const r2 = (v: number) => Math.round(v * 100) / 100;
   const read = (el: Element): number[] => {
     const r = el.getBoundingClientRect();

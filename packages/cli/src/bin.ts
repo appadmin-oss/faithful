@@ -4,7 +4,7 @@
  * line, the worst findings with one fix each, and a path to the rest. Exit codes: 0 pass,
  * 1 fail (findings), 2 could not run (bad input, no browser).
  */
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import { ADAPTERS } from '@usefaithful/adapters';
 import { chromeCandidates, findChrome } from '@usefaithful/browser';
@@ -52,6 +52,7 @@ const HELP = `faithful — prove a build matches its design
   faithful selftest                        prove every rule and the comparison can see a planted fault
   faithful formats                         the design formats Faithful reads
   faithful doctor                          check the browser and environment
+  faithful --version                       the version of this CLI
   faithful init [--skills a,b]              write faithful.config.json, the agent skills and an AGENTS.md block
 
 Designs: Claude Design .dc.html and canvas.json (one screen per board: --screen <id>) and
@@ -61,6 +62,13 @@ Docs: https://github.com/appadmin-oss/faithful`;
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
+  // `faithful --version` / `-v` / `version`: the version of this CLI, nothing else on stdout
+  // (clig.dev: scripts and bug reports read it).
+  if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
+    const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
+    console.log(pkg.version);
+    return 0;
+  }
   const { values: v, positionals: pos } = parseArgs({
     args: rest,
     allowPositionals: true,
