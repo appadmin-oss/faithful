@@ -21,6 +21,7 @@ import { contrastRatio, deltaE, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
 import type { Finding, Kind, Severity } from './findings.js';
 import { MOVEMENT } from './motion.js';
+import { readNarration } from './narration.js';
 
 export type { AuditFacts, AxeFacts, AxeRule } from './audit-facts.js';
 
@@ -304,6 +305,41 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
       shouty[0]?.sel,
     );
 
+  // ── Narration: copy that explains the interface instead of doing its job ──
+  /*
+   * "This page shows your recent transactions", a heading echoed by the sentence under it,
+   * cards that each open "Easily…", footers that sign off "Every figure here is derived from
+   * the ledger". One is a choice and is only noted; the pattern is what reads as generated
+   * (core/narration.ts has the rules and the evidence).
+   */
+  const nar = readNarration(f.slop.blurbs ?? [], f.texts);
+  if (nar.narrated.length) {
+    const ex = nar.narrated[0] as (typeof nar.narrated)[number];
+    const n = nar.narrated.length;
+    add(
+      'wording',
+      n >= 2 ? 'warn' : 'info',
+      `${n === 1 ? 'a heading is' : `${n} of ${nar.introduced} headings are`} explained by the sentence under ${n === 1 ? 'it' : 'them'}, e.g. "${ex.text.slice(0, 60)}" under "${ex.heading.slice(0, 30)}": cut it, or say what the heading cannot (a figure, a deadline, what to do next)`,
+      ex.sel,
+    );
+  }
+  for (const g of nar.uniformGrids)
+    add(
+      'wording',
+      'warn',
+      g.opening
+        ? `${g.n} cards in one grid open the same way ("${g.opening[0]?.toUpperCase()}${g.opening.slice(1)}…"): write each for what it does, or let the heading stand alone`
+        : `${g.n} cards in one grid each explain themselves: let the headings stand alone, or say what each one is for`,
+      g.sel,
+    );
+  if (nar.signoffs.length)
+    add(
+      'wording',
+      nar.signoffs.length >= 2 ? 'warn' : 'info',
+      `${nar.signoffs.length === 1 ? 'a note vouches' : `${nar.signoffs.length} notes vouch`} for the page instead of informing ("${nar.signoffs[0]?.text.slice(0, 60)}"): say it once where it matters, if at all`,
+      nar.signoffs[0]?.sel,
+    );
+
   // ── Navigation and structure: the menu's LOGIC, which no amount of looking at pixels finds ──
   navLogic(f, o.navMax ?? 7, add);
 
@@ -340,6 +376,11 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   tell('cards nested in cards', s.nestedCards.length, s.nestedCards[0]);
   tell('decoration stacked on one box (gradient, glow, glass, ring)', s.stacked?.length ?? 0, s.stacked?.[0]);
   tell('a label above a heading that repeats it', s.restated?.length ?? 0, s.restated?.[0]);
+  if (nar.narrated.length >= 2)
+    tell('headings explained by the sentence under them', nar.narrated.length, nar.narrated[0]?.sel);
+  if (nar.uniformGrids.length)
+    tell('cards that each explain themselves', nar.uniformGrids.length, nar.uniformGrids[0]?.sel);
+  if (nar.signoffs.length >= 2) tell('notes that vouch for the page', nar.signoffs.length, nar.signoffs[0]?.sel);
   if (s.glass.length > 2) tell('frosted-glass panels', s.glass.length, s.glass[0]);
   if (s.badgeAboveH1) tell('a pill badge above the headline', 1, s.badgeAboveH1);
   const generic = f.texts.filter((t) => GENERIC.some((g) => g.test(t.text)));

@@ -52,6 +52,14 @@ and a phone honours the page's viewport meta (without one it lays the page out 9
 shrinks it, which is reported). A 390px desktop window is not a phone and shows the desktop
 design. Override with `--viewports 1024x768:tablet` or `390x844:desktop`.
 
+**Copy that narrates the interface** is named: a page whose headings are each explained by the
+sentence under them ("This page shows your recent transactions"), a heading echoed in other
+words, cards that all open "Easily…", footers that vouch "Every figure here is derived from the
+ledger". One is a choice and only noted; the pattern is a warning and counts as a tell. Hints a
+field points at, `<details>`, empty states and legal notices are never counted
+(`docs/research/narration-and-physics-2026-11.md`). Elements that keep moving when the reader
+asked for less motion are reported too.
+
 Every audit also renders each page **with text at 200%** (WCAG 1.4.4) and **at 320px wide**
 (WCAG 1.4.10), reporting only the clipped text, overlaps and sideways scroll each adds: a menu
 that fits at the author's size and cuts off its last item for a reader with larger text is
@@ -162,6 +170,14 @@ page and needs no `--screen`.
 - **Size, type and colour**: font family (the face that actually rendered, not the one the CSS
   asked for), size, weight, line height, letter spacing; text and background colour by
   CIEDE2000; borders and radii.
+- **Motion, as declared**: each element's transitions and animations, CSS and scripted —
+  which properties move, for how long, along which curve, after which delay, how many times. A
+  design that moves where the build is still is an error.
+- **Motion, as it happens** (`--physics`): both pages are watched coming in, frame by frame,
+  and how each element moved is compared — distance, time to rest, curve, overshoot. A spring
+  is fitted (stiffness and damping, as spring libraries take them), so "the design springs
+  (overshoots 23%; stiffness ≈ 365, damping ≈ 16); the build stops dead" is a finding, not a
+  feeling. Script-driven motion has no declaration; this is the only way to see it.
 - **Touch targets** under the minimum.
 - **Faults the design has too** are notes, not errors: you are not asked to fix the designer's
   12px button.
@@ -219,7 +235,7 @@ that proves it was done:
 ## Commands
 
 ```
-faithful verify <design> --build <url|file> [--scroll 0,900] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+faithful verify <design> --build <url|file> [--scroll 0,900] [--physics] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
 faithful verify                        every page in faithful.config.json "checks", in one verdict
 faithful audit <url|file> [--viewports 375x812,1024x768:tablet] [--color-scheme light|dark|both] [--stress zoom,reflow,expand,rtl,spacing|none] [--no-axe]  judge a page with no design
 faithful parity --before <a> --after <b> [--pages /,/x]  after a refactor or redesign: nothing lost

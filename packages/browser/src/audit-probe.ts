@@ -898,6 +898,44 @@ export function auditProbe(): AuditFacts {
     if (lw.length && lw.every((w) => hw.has(w) || hw.has(w.replace(/s$/, '')) || hw.has(`${w}s`)))
       restated.push(path(prev));
   }
+  /*
+   * Each heading and the sentence under it, for the narration check (core/narration.ts): the
+   * first prose that follows it, in its own block or the one after a heading wrapper. Never a
+   * field's hint (something points at it with aria-describedby), text inside <details> or a
+   * form, or an empty state; those are allowed to explain.
+   */
+  const described = new Set(
+    Array.from(document.querySelectorAll('[aria-describedby]')).flatMap((e) =>
+      (e.getAttribute('aria-describedby') ?? '').split(/\s+/).filter(Boolean),
+    ),
+  );
+  const proseAfter = (hd: Element): Element | null => {
+    let next = hd.nextElementSibling;
+    if (!next && hd.parentElement && hd.parentElement.children.length <= 2) next = hd.parentElement.nextElementSibling;
+    while (next && (!shown(next) || !(next.textContent ?? '').trim())) next = next.nextElementSibling;
+    if (!next || /^(H[1-6]|UL|OL|TABLE|FORM|NAV|BUTTON|A|IMG|SVG|INPUT|SELECT|TEXTAREA)$/.test(next.tagName))
+      return null;
+    if (next.querySelector('h1,h2,h3,h4,h5,h6,input,select,textarea,button,table,ul,ol,img')) return null;
+    return next;
+  };
+  const blurbs: { sel: string; heading: string; text: string; grid?: string }[] = [];
+  for (const hd of Array.from(document.querySelectorAll('h1,h2,h3,h4'))) {
+    if (!shown(hd) || blurbs.length >= 120) continue;
+    const p = proseAfter(hd);
+    if (!p || (p.id && described.has(p.id)) || p.closest('details,form,fieldset,label,[role=status]')) continue;
+    if (/\b(hint|help|empty|placeholder)\b/i.test(`${p.className}`)) continue;
+    const text = (p.textContent ?? '').replace(/\s+/g, ' ').trim();
+    if (text.length < 8 || text.length > 400) continue;
+    let card: Element | null = hd.parentElement;
+    for (let i = 0; card && i < 3 && !isCard(card); i++) card = card.parentElement;
+    const b: (typeof blurbs)[number] = {
+      sel: path(p),
+      heading: (hd.textContent ?? '').replace(/\s+/g, ' ').trim(),
+      text,
+    };
+    if (card && isCard(card) && card.parentElement) b.grid = path(card.parentElement);
+    blurbs.push(b);
+  }
   const h1 = document.querySelector('h1');
   let badgeAboveH1: string | null = null;
   if (h1) {
@@ -990,6 +1028,7 @@ export function auditProbe(): AuditFacts {
       sideStripes,
       stacked,
       restated,
+      blurbs,
       nestedCards,
       badgeAboveH1,
       iconTiles,

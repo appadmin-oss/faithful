@@ -18,6 +18,10 @@ description: Write and fix interface wording — buttons, links, headings, error
 - Specific beats grand. "Twelve plots free this spring" over "Elevate your gardening
   journey". Cut "seamless", "unlock the power", "next-level", "revolutionise".
 - No shouting: no ALL-CAPS sentences, no "!!".
+- Do not narrate the interface. No sentence under a heading that explains the page ("This page
+  shows your transactions", "Here you can…") or says the heading again in other words; no card
+  blurbs that all open the same way; no footer vouching "Every figure here is derived from…".
+  Cut it, or say what the heading cannot: a figure, a deadline, what to do next.
 - Numbers carry units and real values; never a round, unsourced "10,000+ happy customers".
 
 ## Errors and empty states

@@ -8,7 +8,7 @@ what to do next, in order.
 
 - **Code:** `main` on GitHub at [appadmin-oss/faithful](https://github.com/appadmin-oss/faithful).
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
-- **Health:** `pnpm install && pnpm check` → lint clean, build, 256 tests, selftest — all green.
+- **Health:** `pnpm install && pnpm check` → lint clean, build, 325 tests, selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **npm scope: `@usefaithful`** (24 Nov 2026). `@faithful` belongs to someone else (it holds
   `table-filter-sortt`). Every package is `@usefaithful/*`; the command is
@@ -58,7 +58,20 @@ purpose and its test watched to fail; `pnpm check` green:
   odd-shaped buttons.
 - Research for all of it: `docs/research/reference-free-and-motion-2026-11.md`.
 
-Next: motion (getAnimations + `page.clock` stepping, spring fitting), cross-viewport layout
+Done 25 Nov 2026 (`docs/research/narration-and-physics-2026-11.md`):
+
+- **Motion, declared** (`core/motion.ts`, `browser/motion.ts`, kind `motion`): transitions and
+  CSS/scripted animations read with the freeze lifted for one synchronous read; compared by
+  property, duration (50ms and 20%), easing (bézier control points within 0.1), delay, repeats.
+  The audit reports what still moves under `prefers-reduced-motion`.
+- **Physics** (`verify --physics`, MCP `physics`): `browser/physics.ts` records trajectories as
+  the page comes in; `core/physics.ts` reduces them (time to rest, overshoot, swings, curve,
+  spring fit with frame-phase corrections) and compares. Reported under kind `motion`.
+- **Narration** (`core/narration.ts`, kind `wording`, and a tell): self-referential intros,
+  heading echoes, templated card blurbs, sign-offs. GOV.UK-style negatives in the tests; three
+  live GOV.UK pages clean.
+
+Next: hover/press/scroll motion (the recorder watches entry only), cross-viewport layout
 consistency (ReDeCheck), keyboard/focus pass, site crawl, `faithful approve`, a published
 precision/recall benchmark — in the order ranked at the end of that research file.
 

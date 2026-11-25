@@ -572,3 +572,53 @@ describe('motion the reader asked to be spared (prefers-reduced-motion)', () => 
     expect(await motion('.ticker{animation:fade .4s ease-out}')).toEqual([]);
   }, 60_000);
 });
+
+describe('copy that narrates the interface', () => {
+  const css = `<style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card{padding:16px;border:1px solid #ccc;border-radius:8px;background:#fafafa}</style>`;
+  const head = (t: string) =>
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t}</title>${css}</head>`;
+  const wording = async (html: string) =>
+    scoreAudit(await r.audit({ html, baseDir: FIX }, { width: 1440, height: 900 }, {}), 's').findings.filter(
+      (x) => x.kind === 'wording' || x.kind === 'slop',
+    );
+
+  it('a dashboard that explains itself everywhere is named, as a pattern and as a tell', async () => {
+    const f = await wording(`${head('Money')}<body><main>
+<h1>Your money</h1><p>This page shows an overview of all your accounts and spending.</p>
+<section><h2>Recent activity</h2><p>Your recent account activity.</p><p>£12.40 Tesco, 3 March</p></section>
+<section><h2>Monthly spending</h2><p>See your monthly spending at a glance.</p><p>£1,204 so far</p></section>
+<div class="grid">
+<div class="card"><h3>Accounts</h3><p>Easily manage all of your connected bank accounts in one simple place.</p></div>
+<div class="card"><h3>Budgets</h3><p>Easily plan the money you want to spend each month by category.</p></div>
+<div class="card"><h3>Goals</h3><p>Easily save towards the things that matter most to you and yours.</p></div></div>
+<p>Every figure here is derived from the ledger.</p></main>
+<footer><p>All amounts are calculated in real time from your linked accounts.</p></footer></body></html>`);
+    const said = f.map((x) => `${x.severity} ${x.detail}`);
+    expect(said).toContainEqual(
+      expect.stringMatching(
+        /^warn 3 of \d+ headings are explained by the sentence under them, e\.g\. "This page shows/,
+      ),
+    );
+    expect(said).toContainEqual(expect.stringMatching(/^warn 3 cards in one grid open the same way \("Easily…"\)/));
+    expect(said).toContainEqual(expect.stringMatching(/^warn 2 notes vouch for the page instead of informing/));
+    expect(said).toContainEqual(
+      expect.stringMatching(
+        /reads as generated: \d+ known tells together \(.*headings explained by the sentence under them/,
+      ),
+    );
+  }, 60_000);
+
+  it('a service page that says something under each heading is left alone', async () => {
+    const f = await wording(`${head('Renew a passport')}<body><main>
+<h1>Renew or replace your adult passport</h1><p>It costs £88.50 to renew online, or £100 by post.</p>
+<h2>Before you start</h2><p>You'll need your old passport and a digital photo.</p>
+<h2>Check your answers</h2><p>Check your answers before sending your application.</p>
+<form><label for="dob">Date of birth</label><p id="dob-hint">For example, 27 3 2007</p><input id="dob" aria-describedby="dob-hint"></form>
+<details open><summary>Help with photos</summary><h3>Photos</h3><p>This section explains how to take a photo.</p></details>
+<h2>Your reference</h2><p id="ref-hint">Use this page to find your reference number.</p><input aria-label="Reference" aria-describedby="ref-hint">
+<h2>Contact</h2><p>Phone 0300 222 0000, Monday to Friday, 8am to 8pm.</p></main>
+<footer><p>All content is available under the Open Government Licence. © Crown copyright</p></footer></body></html>`);
+    expect(f.filter((x) => /explained by|open the same way|vouch|explain themselves/.test(x.detail))).toEqual([]);
+  }, 60_000);
+});

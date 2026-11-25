@@ -128,6 +128,8 @@ export interface AuditFacts {
     stacked?: string[];
     /** Labels directly above a heading that only repeat the heading's words. */
     restated?: string[];
+    /** Each heading and the prose under it (and the card grid it sits in): the narration check. */
+    blurbs?: { sel: string; heading: string; text: string; grid?: string }[];
     nestedCards: string[];
     badgeAboveH1: string | null;
     iconTiles: number;
