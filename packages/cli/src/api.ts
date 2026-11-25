@@ -11,6 +11,7 @@ import { BrowserError, Renderer } from '@usefaithful/browser';
 import {
   type Adapter,
   applyDeviations,
+  buildModel,
   checkConformity,
   compareParity,
   compareScreens,
@@ -18,6 +19,7 @@ import {
   DEFAULT_CONFIG,
   type FaithfulConfig,
   inventoryOf,
+  judgeAgainstModel,
   langOf,
   mergeViewports,
   normHref,
@@ -32,6 +34,7 @@ import {
   type SourceInput,
   STRESS_CAUSE,
   type StressMode,
+  type StyleModel,
   scanFile,
   scoreAudit,
   selfCheck,
@@ -657,6 +660,13 @@ export interface AuditRunOptions {
   stress?: string | readonly string[];
   /** `false` (`--no-axe`): skip axe-core's WCAG rules this run. Default: the config's `audit.axe`. */
   axe?: boolean;
+  /**
+   * A style model (`faithful model`): every desktop page is also held to the reference's sizes,
+   * radii, button shapes, colours, spacing grid and title size.
+   */
+  model?: string;
+  /** A JavaScript expression the page must make true before it is measured (an app that boots). */
+  readyWhen?: string;
   config?: FaithfulConfig;
   cwd?: string;
 }
@@ -672,12 +682,18 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
   if (o.storageState) session.storageState = sessionFile(o.storageState, o.cwd);
   try {
     const vps = parseViewports(o.viewports ?? AUDIT_VIEWPORTS, cfg.viewports);
-    const target = isUrl(o.target)
-      ? { url: o.target }
-      : {
-          html: await readFile(resolve(o.cwd ?? process.cwd(), o.target), 'utf8'),
-          baseDir: resolve(o.cwd ?? process.cwd(), o.target, '..'),
-        };
+    const target = {
+      ...(isUrl(o.target)
+        ? { url: o.target }
+        : {
+            html: await readFile(resolve(o.cwd ?? process.cwd(), o.target), 'utf8'),
+            baseDir: resolve(o.cwd ?? process.cwd(), o.target, '..'),
+          }),
+      ...(o.readyWhen ? { readyWhen: o.readyWhen } : {}),
+    };
+    const model = o.model
+      ? (JSON.parse(await readFile(resolve(o.cwd ?? process.cwd(), o.model), 'utf8')) as StyleModel)
+      : null;
     const results: ScreenResult[] = [];
     const narrowest = vps.reduce((a, b) => (b.width < a.width ? b : a));
     const opts = { minTarget: Math.min(cfg.minTarget, 24), navMax: cfg.audit.navMax };
@@ -688,6 +704,16 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
         // Light is the default and stays unlabelled; a dark (or two-scheme) run says which is which.
         const named = schemes.length > 1 || scheme === 'dark' ? ` ${scheme}` : '';
         const r = scoreAudit(facts, `audit@${vp.width}${named}`, opts);
+        if (model && vp.width >= 768)
+          for (const x of judgeAgainstModel(facts, model).findings)
+            r.findings.push({
+              kind: x.kind,
+              severity: x.severity,
+              detail: x.detail,
+              screen: r.screen,
+              viewport: `${vp.width}x${vp.height}`,
+              ...(x.sel ? { buildId: x.sel } : {}),
+            });
         if (named) for (const f of r.findings) f.viewport = `${f.viewport}${named}`;
         results.push(r);
         for (const mode of stresses) {
@@ -726,6 +752,47 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
     const run = summarise(results, provenance, 'audit', 0);
     await save(run, o.cwd);
     return run;
+  } finally {
+    await session.close();
+  }
+}
+
+// ── Model: a reference product's design system, read off its running pages ───
+
+export interface ModelOptions {
+  /** The reference's pages (URLs or files). Several pages make a truer model than one. */
+  targets: string[];
+  storageState?: string;
+  readyWhen?: string;
+  /** Desktop viewport to read it at (default 1440x900). */
+  viewport?: string;
+  config?: FaithfulConfig;
+  cwd?: string;
+}
+
+/** Read a reference product's design system off its pages: `audit --model` holds others to it. */
+export async function model(o: ModelOptions): Promise<StyleModel> {
+  const cfg = o.config ?? (await loadConfig(o.cwd));
+  const session = new Session(cfg);
+  if (o.storageState) session.storageState = sessionFile(o.storageState, o.cwd);
+  try {
+    const vp = parseViewports(o.viewport ?? '1440x900', cfg.viewports)[0] as Viewport;
+    const pages = [];
+    for (const t of o.targets) {
+      const path = localPath(t);
+      const target = {
+        ...(isUrl(path)
+          ? { url: path }
+          : {
+              html: await readFile(resolve(o.cwd ?? process.cwd(), path), 'utf8'),
+              baseDir: resolve(o.cwd ?? process.cwd(), path, '..'),
+            }),
+        ...(o.readyWhen ? { readyWhen: o.readyWhen } : {}),
+      };
+      const browser = await session.browser();
+      pages.push({ source: t, facts: await browser.audit(target, vp, { colorScheme: 'light', axe: false }) });
+    }
+    return buildModel(pages);
   } finally {
     await session.close();
   }

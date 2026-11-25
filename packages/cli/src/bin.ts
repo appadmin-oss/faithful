@@ -4,7 +4,8 @@
  * line, the worst findings with one fix each, and a path to the rest. Exit codes: 0 pass,
  * 1 fail (findings), 2 could not run (bad input, no browser).
  */
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { ADAPTERS } from '@usefaithful/adapters';
 import { chromeCandidates, findChrome } from '@usefaithful/browser';
@@ -24,6 +25,7 @@ import {
   guard,
   lastRun,
   loadConfig,
+  model,
   OUT_DIR,
   outlineAny,
   parity,
@@ -44,6 +46,10 @@ const HELP = `faithful — prove a build matches its design
       [--stress zoom,reflow,open,expand,rtl,spacing|none]  extra passes: text at 200%, 320px wide, collapsed sections opened (all three by default),
                                            text 1.3–2× longer, right-to-left, WCAG text spacing
       [--no-axe]                           skip axe-core's WCAG 2.2 A/AA rules (or config audit.axe: false)
+      [--model model.json]                 also hold every desktop page to a reference product's system (faithful model)
+      [--ready-when <js>]                  wait until this is true before measuring (an app that boots)
+  faithful model <url|file>… [--out f]    read a reference product's design system off its pages: type, radii, buttons,
+                                           colours, spacing grid, title size, menu length
   faithful parity --before <a> --after <b>  after a refactor or redesign: can users still do everything they could?
   faithful outline <design|folder>         what a design contains, in a few lines
   faithful spec <design> [--out file]      the design as a Faithful spec (for design agents to ship)
@@ -94,6 +100,8 @@ async function main(argv: string[]): Promise<number> {
       all: { type: 'boolean', default: false },
       'update-baseline': { type: 'boolean', default: false },
       'no-axe': { type: 'boolean', default: false },
+      model: { type: 'string' },
+      'ready-when': { type: 'string' },
       help: { type: 'boolean', short: 'h', default: false },
     },
   });
@@ -141,11 +149,35 @@ async function main(argv: string[]): Promise<number> {
         ...(v.stress !== undefined ? { stress: v.stress } : {}),
         ...(v['no-axe'] ? { axe: false } : {}),
         ...(v['storage-state'] ? { storageState: v['storage-state'] } : {}),
+        ...(v.model ? { model: v.model } : {}),
+        ...(v['ready-when'] ? { readyWhen: v['ready-when'] } : {}),
       });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
       );
       return run.pass ? 0 : 1;
+    }
+    case 'model': {
+      if (!pos.length)
+        throw new FaithfulError('usage: faithful model <url|file>… [--out model.json] [--storage-state <file>]');
+      const m = await model({
+        targets: pos,
+        config: cfg,
+        ...(v['storage-state'] ? { storageState: v['storage-state'] } : {}),
+        ...(v['ready-when'] ? { readyWhen: v['ready-when'] } : {}),
+        ...(v.viewports ? { viewport: v.viewports } : {}),
+      });
+      const out = v.out ?? `${OUT_DIR}/model.json`;
+      await mkdir(dirname(resolve(out)), { recursive: true });
+      await writeFile(out, `${JSON.stringify(m, null, 2)}\n`);
+      console.log(
+        `faithful model · ${m.sources.length} page${m.sources.length === 1 ? '' : 's'} → ${out}\n` +
+          `  type ${m.sizes.map((s) => `${s}`).join('/')}px · radii ${m.radii.join('/')}px · ` +
+          `buttons ${m.buttons.map((b) => `${b.height}h/${b.radius}r`).join(', ')} · ${m.colors.length} colours` +
+          `${m.grid ? ` · ${m.grid.unit}px grid` : ''} · titles ${m.titles.join('/')}px · menus ≤${m.navMax}\n` +
+          `  hold another app to it: faithful audit <url> --model ${out}`,
+      );
+      return 0;
     }
     case 'parity': {
       const before = v.before ?? pos[0];

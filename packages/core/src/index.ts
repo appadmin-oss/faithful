@@ -12,6 +12,7 @@ export * from './geometry.js';
 export * from './guards.js';
 export * from './inventory.js';
 export * from './match.js';
+export * from './model.js';
 export * from './motion.js';
 export * from './narration.js';
 export * from './parity.js';

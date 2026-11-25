@@ -36,6 +36,10 @@ The first release, `0.1.0`, will be cut from this.
 - Form design (kind `form`): field width against what it holds, one column, label proximity,
   units; the `open` pass judges collapsed sections as a reader opens them.
 - `data-faithful-ignore`: a region its author marks is left out of verify and audit.
+- `model <url|file>…`: a reference product's design system read off its running pages (text
+  sizes, radii, button shapes, colours, spacing grid, title size, menu length, pooled by use);
+  `audit --model` holds every desktop page of another product to it, measure by measure.
+  `--ready-when <js>` waits for an app that boots before measuring.
 - `pnpm bench`: a labelled benchmark (planted faults and known-good pages), in the test suite.
 
 [Unreleased]: https://github.com/appadmin-oss/faithful/commits/main
