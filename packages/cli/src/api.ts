@@ -152,6 +152,8 @@ export class Session {
     readonly colorScheme: ColorScheme = 'light',
     /** `verify --scroll`: every page this session reads, design and build alike, is scrolled this far. */
     readonly scrollY = 0,
+    /** `verify --physics`: every page is watched coming in, and how each element moved is kept. */
+    readonly physics = false,
   ) {}
 
   browser(): Promise<Renderer> {
@@ -168,6 +170,7 @@ export class Session {
           ignore: this.config.ignore,
           colorScheme: this.colorScheme,
           ...(this.scrollY ? { scrollY: this.scrollY } : {}),
+          ...(this.physics ? { physics: true } : {}),
           ...(asPage ? { asPage } : {}),
         }),
       readFile: (p) => readFile(p, 'utf8'),
@@ -228,6 +231,12 @@ export interface VerifyOptions {
    * state reached by scrolling (a header that swaps after the hero) is checked too. Default 0.
    */
   scroll?: string | readonly number[];
+  /**
+   * `--physics`: watch both pages come in, frame by frame, and compare how each element moved —
+   * distance, time to rest, overshoot (a spring's stiffness and damping), curve. Slower: each
+   * page is loaded with motion on and waited on until it comes to rest.
+   */
+  physics?: boolean;
   config?: FaithfulConfig;
   cwd?: string;
 }
@@ -363,7 +372,7 @@ async function compareAt(o: VerifyOptions, scrollY: number) {
   };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const [scheme] = parseColorScheme(o.colorScheme);
-  const session = new Session(cfg, scheme, scrollY);
+  const session = new Session(cfg, scheme, scrollY, o.physics === true);
   // Every path is read against the caller's folder, as audit and parity read theirs: an MCP
   // server started elsewhere must not compare some other design.html.
   const cwd = o.cwd ?? process.cwd();

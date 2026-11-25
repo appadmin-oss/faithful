@@ -77,6 +77,12 @@ export function createServer(cwd = process.cwd()): McpServer {
           .describe(
             'Scroll positions to compare at, design and build alike, e.g. [0, 900] for a header that changes after the hero',
           ),
+        physics: z
+          .boolean()
+          .optional()
+          .describe(
+            'Watch both pages come in frame by frame and compare how elements move: distance, time to rest, overshoot (spring stiffness/damping), curve. Slower.',
+          ),
       }),
       outputSchema: z
         .object({
@@ -89,7 +95,7 @@ export function createServer(cwd = process.cwd()): McpServer {
         .passthrough(),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ design, build, viewports, also, max, colorScheme, screen, scroll }) =>
+    async ({ design, build, viewports, also, max, colorScheme, screen, scroll, physics }) =>
       guarded(async () => {
         const run = await verify({
           design,
@@ -101,6 +107,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           ...(colorScheme ? { colorScheme } : {}),
           ...(screen ? { screen } : {}),
           ...(scroll?.length ? { scroll } : {}),
+          ...(physics ? { physics } : {}),
         });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),

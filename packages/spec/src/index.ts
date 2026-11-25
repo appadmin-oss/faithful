@@ -44,6 +44,27 @@ export interface ElementStyle {
   renderedFont?: string;
   /** How it moves, when the source says (a rendered page does; see `Screen.motionRead`). */
   motion?: Motion;
+  /**
+   * How it actually moved as the page came in, sampled every frame (`Screen.physicsRead`):
+   * what motion DOES, where `motion` is what it declares. A spring, a script-driven entrance
+   * and a scroll-linked reveal have no declaration to read; their trajectory is the design.
+   */
+  trajectory?: Trajectory;
+}
+
+/**
+ * One element's movement, frame by frame, from the first frame it moved. Times in ms from that
+ * frame; `x`/`y` its page position, `w`/`h` its drawn size, `o` its opacity. Equal lengths.
+ */
+export interface Trajectory {
+  /** When it started moving, in ms from the start of the page's first frame. */
+  start: number;
+  t: number[];
+  x: number[];
+  y: number[];
+  w: number[];
+  h: number[];
+  o: number[];
 }
 
 /** One moving property (a transition), or one animation. Times in ms. */
@@ -125,6 +146,11 @@ export interface Screen {
    * the source cannot say (a Figma import), and then motion is not compared at all.
    */
   motionRead?: boolean;
+  /**
+   * Trajectories were sampled for this screen (`--physics`): an element without
+   * `style.trajectory` did not move as the page came in.
+   */
+  physicsRead?: boolean;
 }
 
 export type TokenType = 'color' | 'dimension' | 'fontFamily' | 'fontWeight' | 'number' | 'duration' | 'other';

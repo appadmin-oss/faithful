@@ -8,13 +8,21 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { type AuditFacts, FILE_ENTRY_DIR, FILE_ORIGIN, type Rendered, type RenderTarget } from '@usefaithful/core';
-import { type DesignElement, deviceOf, type Region, type Screen, type Viewport } from '@usefaithful/spec';
+import {
+  type DesignElement,
+  deviceOf,
+  type Region,
+  type Screen,
+  type Trajectory,
+  type Viewport,
+} from '@usefaithful/spec';
 import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { auditProbe } from './audit-probe.js';
 import { AXE_TAGS, axeSource, runAxe } from './axe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
 import { type MotionReading, stampMotion } from './motion.js';
+import { recordPhysics } from './physics.js';
 import { expandText, setRtl, setSpacing, zoomText } from './stress.js';
 
 /**
@@ -56,6 +64,11 @@ export interface CaptureOptions {
   asPage?: boolean;
   /** Read each element's declared motion (on by default). */
   motion?: boolean;
+  /**
+   * Watch the page come in, frame by frame, and record how each element actually moved (off
+   * by default: it loads the page without reduced motion and waits for it to come to rest).
+   */
+  physics?: boolean;
 }
 
 const FREEZE = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}`;
@@ -160,7 +173,9 @@ export class Renderer {
       viewport: { width: viewport.width, height: viewport.height },
       ...deviceContext(viewport, opts.asPage === true),
       deviceScaleFactor: 1,
-      reducedMotion: 'reduce',
+      // Physics is watched as a reader who has not asked for less motion sees the page come in;
+      // the preference is set back to `reduce` before anything is measured.
+      reducedMotion: opts.physics ? 'no-preference' : 'reduce',
       colorScheme: opts.colorScheme ?? 'light',
       locale: 'en-GB',
       timezoneId: 'UTC',
@@ -169,8 +184,10 @@ export class Renderer {
     ctx.setDefaultTimeout(timeout);
     try {
       const page = await ctx.newPage();
+      if (opts.physics) await page.addInitScript({ content: `(${recordPhysics.toString()})()` });
       if (target.initScript) await page.addInitScript({ content: target.initScript });
       await this.load(page, target, timeout);
+      if (opts.physics) await this.watchPhysics(page, timeout);
       await this.settle(page, target, timeout);
       if (opts.scrollY) await this.scrolled(page, target, opts.scrollY, timeout);
       if (opts.motion !== false) await this.readMotion(page, timeout, true);
@@ -328,6 +345,33 @@ export class Renderer {
     } finally {
       if (reducedMotion === 'no-preference') await page.emulateMedia({ reducedMotion: 'reduce' });
     }
+  }
+
+  /**
+   * Let the page come to rest (nothing moved for 400ms, nothing finite still running; at most
+   * the recorder's own six seconds), then stamp what moved and restore reduced motion.
+   */
+  private async watchPhysics(page: Page, timeout: number): Promise<void> {
+    type Recorder = { quiet(ms: number): boolean; stamp(): number };
+    // In the page's own world: the recorder is there, holding the elements it watched.
+    await page
+      .waitForFunction(
+        () => {
+          const r = (window as unknown as Record<symbol, Recorder | undefined>)[Symbol.for('faithful.physics')];
+          return !r || r.quiet(400);
+        },
+        undefined,
+        { timeout: Math.min(timeout, 8000), polling: 100 },
+      )
+      .catch(() => undefined);
+    await within(
+      page.evaluate(
+        () => (window as unknown as Record<symbol, Recorder | undefined>)[Symbol.for('faithful.physics')]?.stamp() ?? 0,
+      ),
+      timeout,
+      'recording how the page moved',
+    ).catch(unlessHung);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
   }
 
   private async settle(page: Page, target: RenderTarget, timeout: number): Promise<void> {
@@ -515,6 +559,17 @@ export function toScreen(raw: RawPage, viewport: Viewport, screenId: string): Sc
         /* a reading the page tampered with is no reading */
       }
     }
+    if (typeof s.trajectory === 'string') {
+      try {
+        const j = JSON.parse(s.trajectory) as Trajectory;
+        const ok = (a: unknown): a is number[] =>
+          Array.isArray(a) && a.length === j.t.length && a.every((v) => typeof v === 'number' && Number.isFinite(v));
+        if (typeof j.start === 'number' && ok(j.t) && ok(j.x) && ok(j.y) && ok(j.w) && ok(j.h) && ok(j.o))
+          style.trajectory = { start: j.start, t: j.t, x: j.x, y: j.y, w: j.w, h: j.h, o: j.o };
+      } catch {
+        /* as above */
+      }
+    }
     const e: DesignElement = { id: r.id, kind: r.kind, box: r.box, style };
     if (r.text !== undefined) e.text = r.text;
     if (r.role !== undefined) e.role = r.role;
@@ -526,5 +581,6 @@ export function toScreen(raw: RawPage, viewport: Viewport, screenId: string): Sc
   const screen: Screen = { id: screenId, name: screenId, viewport, elements, regions, pageHeight: raw.pageHeight };
   if (raw.fontFaces.length) screen.fontFaces = raw.fontFaces;
   if (raw.motionRead) screen.motionRead = true;
+  if (raw.physicsRead) screen.physicsRead = true;
   return screen;
 }

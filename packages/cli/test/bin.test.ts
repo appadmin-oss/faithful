@@ -310,3 +310,44 @@ body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}main{paddin
     expect(still.out).toMatch(/the design animates \(pulse 2000ms ease-in-out ×infinite\); the build is still/);
   }, 180_000);
 });
+
+describe('physics: how a design moves, watched frame by frame', () => {
+  // A panel that springs up into place, driven by a script (as Framer Motion or react-spring
+  // would): there is no transition or animation to declare it, only the movement itself.
+  const SPRING = `const el=document.querySelector('.panel');
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches){let y=40,v=0,last=performance.now();
+el.style.transform='translateY(40px)';
+const step=(now)=>{const dt=Math.min(32,now-last)/1000;last=now;v+=(-300*y-14*v)*dt;y+=v*dt;
+if(Math.abs(y)>0.05||Math.abs(v)>0.5){el.style.transform='translateY('+y.toFixed(2)+'px)';requestAnimationFrame(step);}else el.style.transform='';};
+requestAnimationFrame(step);}`;
+  const GLIDE = `const el=document.querySelector('.panel');
+if(!matchMedia('(prefers-reduced-motion: reduce)').matches){el.style.transform='translateY(40px)';
+requestAnimationFrame(()=>requestAnimationFrame(()=>{el.style.transition='transform 400ms ease-out';el.style.transform='';}));}`;
+  const page = (
+    script: string,
+  ) => `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio</title><style>
+body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}main{padding:24px}
+.panel{width:320px;padding:16px;background:#fff}</style></head><body><main><h1>Studio</h1>
+<div class="panel"><p>Lessons this week.</p></div></main><script>${script}</script></body></html>`;
+
+  it('the same spring passes; a glide is named with the spring it replaced; a still build fails only when watched', () => {
+    const d = tmp();
+    writeFileSync(join(d, 'design.html'), page(SPRING));
+    writeFileSync(join(d, 'same.html'), page(SPRING));
+    writeFileSync(join(d, 'glide.html'), page(GLIDE));
+    writeFileSync(join(d, 'still.html'), page(''));
+    const vp = ['--viewports', '1280x800', '--max', '20'];
+    const same = run(d, 'verify', 'design.html', '--build', 'same.html', ...vp, '--physics');
+    expect(same.out).not.toMatch(/on entry/);
+    expect(same.code).toBe(0);
+    const glide = run(d, 'verify', 'design.html', '--build', 'glide.html', ...vp, '--physics');
+    expect(glide.out).toMatch(
+      /W motion: on entry, vertical movement: the design springs \(overshoots \d+%, \d+ swings?; stiffness ≈ \d+, damping ≈ \d+\); the build stops dead/,
+    );
+    // Without --physics a script-driven spring is invisible: nothing declares it.
+    expect(run(d, 'verify', 'design.html', '--build', 'still.html', ...vp).code).toBe(0);
+    const still = run(d, 'verify', 'design.html', '--build', 'still.html', ...vp, '--physics');
+    expect(still.code).toBe(1);
+    expect(still.out).toMatch(/E motion: on entry the design moves up 40px over \d+ms with a spring/);
+  }, 240_000);
+});

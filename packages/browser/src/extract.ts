@@ -36,6 +36,8 @@ export interface RawPage {
   fontFaces: string[];
   /** Motion was read before extraction (each moving element carried its reading). */
   motionRead?: boolean;
+  /** Trajectories were recorded as the page came in (physics.ts). */
+  physicsRead?: boolean;
 }
 
 export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
@@ -349,6 +351,30 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
   }
   document.documentElement.removeAttribute('data-faithful-motion-read');
 
+  // Trajectories stamped by recordPhysics (physics.ts). A wrapper that moved is often not an
+  // element of its own here (no paint, no text); its movement is then its first read
+  // descendant's, which moved with it.
+  const moved = Array.from(document.querySelectorAll('[data-faithful-trajectory]'));
+  const physicsRead = document.documentElement.hasAttribute('data-faithful-physics-read');
+  if (moved.length) {
+    const byId = new Map(out.map((e) => [e.id, e] as const));
+    for (const el of moved) {
+      const tr = el.getAttribute('data-faithful-trajectory') ?? '';
+      let e = byId.get(cssPath(el));
+      if (!e || e.style.trajectory)
+        for (const d of Array.from(el.querySelectorAll('*'))) {
+          const c = byId.get(cssPath(d));
+          if (c && !c.style.trajectory) {
+            e = c;
+            break;
+          }
+        }
+      if (e && !e.style.trajectory) e.style.trajectory = tr;
+      el.removeAttribute('data-faithful-trajectory');
+    }
+  }
+  document.documentElement.removeAttribute('data-faithful-physics-read');
+
   const failed: string[] = [];
   const faces: string[] = [];
   try {
@@ -369,5 +395,6 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
     fontsFailed: [...new Set(failed)],
     fontFaces: [...new Set(faces)],
     motionRead,
+    physicsRead,
   };
 }

@@ -12,5 +12,6 @@ export * from './inventory.js';
 export * from './match.js';
 export * from './motion.js';
 export * from './parity.js';
+export * from './physics.js';
 export * from './report.js';
 export * from './text.js';

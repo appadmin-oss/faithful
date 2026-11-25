@@ -39,7 +39,7 @@ import { init } from './init.js';
 const HELP = `faithful — prove a build matches its design
 
   faithful verify                          every page in faithful.config.json "checks", one verdict
-  faithful verify <design> --build <url|file> [--scroll 0,900] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
+  faithful verify <design> --build <url|file> [--scroll 0,900] [--physics] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
   faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design: layout faults, contrast, WCAG (axe-core), readability, AI-slop tells
       [--stress zoom,reflow,expand,rtl,spacing|none]  extra passes: text at 200%, 320px wide (both by default),
                                            text 1.3–2× longer, right-to-left, WCAG text spacing
@@ -75,6 +75,7 @@ async function main(argv: string[]): Promise<number> {
       stress: { type: 'string' },
       screen: { type: 'string' },
       scroll: { type: 'string' },
+      physics: { type: 'boolean', default: false },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
       max: { type: 'string', default: '' },
@@ -111,6 +112,7 @@ async function main(argv: string[]): Promise<number> {
       if (v['color-scheme'] !== undefined) opts.colorScheme = v['color-scheme'];
       if (v.screen !== undefined) opts.screen = v.screen;
       if (v.scroll !== undefined) opts.scroll = v.scroll;
+      if (v.physics) opts.physics = true;
       const run = await verify(opts);
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),

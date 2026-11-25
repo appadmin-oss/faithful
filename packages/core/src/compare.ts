@@ -14,6 +14,7 @@ import type { Finding, Kind, Severity } from './findings.js';
 import { area, containment, fmtBox, median } from './geometry.js';
 import { matchElements, type Pair } from './match.js';
 import { motionDiff } from './motion.js';
+import { physicsDiff } from './physics.js';
 import { compareCopy, snippet } from './text.js';
 
 export interface Tally {
@@ -427,6 +428,10 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
     // Motion, when both sides were read for it (a Figma import says nothing, which is not "still").
     if (design.motionRead && build.motionRead)
       for (const m of motionDiff(p.d.style?.motion, p.b.style?.motion)) add('motion', m.severity, m.detail, p.d, p.b);
+    // How it moved as the page came in, where both were watched (`--physics`).
+    if (design.physicsRead && build.physicsRead)
+      for (const m of physicsDiff(p.d.style?.trajectory, p.b.style?.trajectory))
+        add('motion', m.severity, m.detail, p.d, p.b);
   }
 
   // ---- Touch targets, on everything the build makes interactive -------------------------
