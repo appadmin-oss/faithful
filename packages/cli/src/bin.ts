@@ -53,6 +53,7 @@ const HELP = `faithful — prove a build matches its design
   faithful formats                         the design formats Faithful reads
   faithful doctor                          check the browser and environment
   faithful --version                       the version of this CLI
+  --storage-state <file>                   verify, audit, parity: open pages signed in (a Playwright storage-state file)
   faithful init [--skills a,b]              write faithful.config.json, the agent skills and an AGENTS.md block
 
 Designs: Claude Design .dc.html and canvas.json (one screen per board: --screen <id>) and
@@ -84,6 +85,7 @@ async function main(argv: string[]): Promise<number> {
       screen: { type: 'string' },
       scroll: { type: 'string' },
       physics: { type: 'boolean', default: false },
+      'storage-state': { type: 'string' },
       also: { type: 'string', multiple: true },
       format: { type: 'string', short: 'f', default: 'text' },
       max: { type: 'string', default: '' },
@@ -121,6 +123,7 @@ async function main(argv: string[]): Promise<number> {
       if (v.screen !== undefined) opts.screen = v.screen;
       if (v.scroll !== undefined) opts.scroll = v.scroll;
       if (v.physics) opts.physics = true;
+      if (v['storage-state']) opts.storageState = v['storage-state'];
       const run = await verify(opts);
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
@@ -137,6 +140,7 @@ async function main(argv: string[]): Promise<number> {
         ...(v['color-scheme'] !== undefined ? { colorScheme: v['color-scheme'] } : {}),
         ...(v.stress !== undefined ? { stress: v.stress } : {}),
         ...(v['no-axe'] ? { axe: false } : {}),
+        ...(v['storage-state'] ? { storageState: v['storage-state'] } : {}),
       });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),
@@ -154,6 +158,7 @@ async function main(argv: string[]): Promise<number> {
         config: cfg,
         ...(v.viewports ? { viewports: v.viewports } : {}),
         ...(v.pages ? { pages: v.pages.split(',').map((p) => p.trim()) } : {}),
+        ...(v['storage-state'] ? { storageState: v['storage-state'] } : {}),
       });
       console.log(
         v.format === 'json' ? JSON.stringify(formatCompact(run, max)) : formatText(run, max, `${OUT_DIR}/last.json`),

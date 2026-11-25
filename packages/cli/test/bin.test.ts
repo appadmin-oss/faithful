@@ -3,7 +3,7 @@
  * fail an agent should fix, 2 a fault in how it was called — a script that cannot tell a
  * failing build from a typo will loop on the typo.
  */
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -372,4 +372,51 @@ describe('data-faithful-ignore in verify', () => {
     writeFileSync(join(d, 'build.html'), page('Updated 14:37, just now'));
     expect(run(d, 'verify', 'design.html', '--build', 'build.html', '--viewports', '1024x768').code).toBe(0);
   }, 120_000);
+});
+
+describe('--storage-state: pages behind a login', () => {
+  it('audits the signed-in page with the session, the login page without it; a missing file is a bad call', async () => {
+    const d = tmp();
+    const port = 8400 + Math.floor(Math.random() * 500);
+    // A tiny site: a stranger gets a clean sign-in page; a session gets a console with a dead link.
+    const server = spawn(
+      process.execPath,
+      [
+        '-e',
+        `require('http').createServer((q,s)=>{const ok=/sid=ok/.test(q.headers.cookie||'');s.setHeader('content-type','text/html');
+s.end('<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+(ok?'Console':'Sign in')+'</title></head><body><main><h1>'+(ok?'Console':'Sign in')+'</h1>'+(ok?'<p><a href="#">Open the ledger</a></p>':'<p>Use your academy email.</p>')+'</main></body></html>')}).listen(${port})`,
+      ],
+      { stdio: 'ignore' },
+    );
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      writeFileSync(
+        join(d, 'session.json'),
+        JSON.stringify({
+          cookies: [
+            {
+              name: 'sid',
+              value: 'ok',
+              domain: '127.0.0.1',
+              path: '/',
+              expires: -1,
+              httpOnly: true,
+              secure: false,
+              sameSite: 'Lax',
+            },
+          ],
+          origins: [],
+        }),
+      );
+      const url = `http://127.0.0.1:${port}/`;
+      const anon = run(d, 'audit', url, '--stress', 'none', '--no-axe');
+      expect(anon.out).not.toMatch(/dead/);
+      const signedIn = run(d, 'audit', url, '--stress', 'none', '--no-axe', '--storage-state', 'session.json');
+      expect(signedIn.out).toMatch(/dead: /);
+      expect(readFileSync(join(d, '.faithful/last.json'), 'utf8')).not.toMatch(/sid=ok|"sid"|session\.json/);
+      expect(run(d, 'audit', url, '--storage-state', 'nope.json').code).toBe(2);
+    } finally {
+      server.kill();
+    }
+  }, 180_000);
 });

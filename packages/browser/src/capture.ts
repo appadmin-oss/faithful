@@ -137,6 +137,8 @@ const unlessHung = (e: unknown): undefined => {
 };
 
 export class Renderer {
+  /** A Playwright storage-state file every page of this renderer is opened with (`--storage-state`). */
+  storageState?: string;
   private constructor(private readonly browser: Browser) {}
 
   /**
@@ -179,6 +181,9 @@ export class Renderer {
       colorScheme: opts.colorScheme ?? 'light',
       locale: 'en-GB',
       timezoneId: 'UTC',
+      // A signed-in session (Playwright storage state: cookies and localStorage), for pages
+      // behind a login. Never read back into a result.
+      ...(this.storageState ? { storageState: this.storageState } : {}),
     });
     const timeout = opts.timeoutMs ?? 30_000;
     ctx.setDefaultTimeout(timeout);
@@ -239,6 +244,9 @@ export class Renderer {
       colorScheme: opts.colorScheme ?? 'light',
       locale: 'en-GB',
       timezoneId: 'UTC',
+      // A signed-in session (Playwright storage state: cookies and localStorage), for pages
+      // behind a login. Never read back into a result.
+      ...(this.storageState ? { storageState: this.storageState } : {}),
     });
     const timeout = opts.timeoutMs ?? 30_000;
     ctx.setDefaultTimeout(timeout);

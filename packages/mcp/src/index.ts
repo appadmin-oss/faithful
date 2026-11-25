@@ -83,6 +83,12 @@ export function createServer(cwd = process.cwd()): McpServer {
           .describe(
             'Watch both pages come in frame by frame and compare how elements move: distance, time to rest, overshoot (spring stiffness/damping), curve. Slower.',
           ),
+        storageState: z
+          .string()
+          .optional()
+          .describe(
+            'Path to a Playwright storage-state file (cookies and localStorage of a signed-in session), for pages behind a login',
+          ),
       }),
       outputSchema: z
         .object({
@@ -95,7 +101,7 @@ export function createServer(cwd = process.cwd()): McpServer {
         .passthrough(),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ design, build, viewports, also, max, colorScheme, screen, scroll, physics }) =>
+    async ({ design, build, viewports, also, max, colorScheme, screen, scroll, physics, storageState }) =>
       guarded(async () => {
         const run = await verify({
           design,
@@ -108,6 +114,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           ...(screen ? { screen } : {}),
           ...(scroll?.length ? { scroll } : {}),
           ...(physics ? { physics } : {}),
+          ...(storageState ? { storageState } : {}),
         });
         return {
           ...text(formatText(run, max ?? 8, `${OUT_DIR}/last.json`)),
@@ -126,6 +133,12 @@ export function createServer(cwd = process.cwd()): McpServer {
         target: z.string().describe('URL or HTML file path'),
         viewports: z.string().optional().describe('Default "375x812,1440x900"'),
         colorScheme: z.enum(['light', 'dark', 'both']).optional().describe('Default light; both = each viewport twice'),
+        storageState: z
+          .string()
+          .optional()
+          .describe(
+            'Path to a Playwright storage-state file (cookies and localStorage of a signed-in session), for pages behind a login',
+          ),
         stress: z
           .array(z.enum(['expand', 'rtl', 'spacing', 'zoom', 'reflow']))
           .optional()
@@ -136,13 +149,14 @@ export function createServer(cwd = process.cwd()): McpServer {
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ target, viewports, colorScheme, stress, max }) =>
+    async ({ target, viewports, colorScheme, stress, max, storageState }) =>
       guarded(async () => {
         const run = await audit({
           target,
           cwd,
           config: await loadConfig(cwd),
           ...(viewports ? { viewports } : {}),
+          ...(storageState ? { storageState } : {}),
           ...(colorScheme ? { colorScheme } : {}),
           ...(stress?.length ? { stress } : {}),
         });
@@ -166,10 +180,16 @@ export function createServer(cwd = process.cwd()): McpServer {
           .array(z.string())
           .optional()
           .describe('Paths to compare; default: the before page and the pages it links to'),
+        storageState: z
+          .string()
+          .optional()
+          .describe(
+            'Path to a Playwright storage-state file (cookies and localStorage of a signed-in session), for pages behind a login',
+          ),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async ({ before, after, pages }) =>
+    async ({ before, after, pages, storageState }) =>
       guarded(async () => {
         const run = await parity({
           before,
@@ -177,6 +197,7 @@ export function createServer(cwd = process.cwd()): McpServer {
           cwd,
           config: await loadConfig(cwd),
           ...(pages?.length ? { pages } : {}),
+          ...(storageState ? { storageState } : {}),
         });
         return { ...text(formatText(run, 8, `${OUT_DIR}/last.json`)), structuredContent: formatCompact(run, 8) };
       }),

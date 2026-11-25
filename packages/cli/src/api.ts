@@ -143,6 +143,13 @@ export function parseStress(s: string | readonly string[] | undefined): StressMo
   return out;
 }
 
+/** A storage-state path, resolved against the caller's folder; a missing file is a bad call. */
+function sessionFile(path: string, cwd?: string): string {
+  const p = resolve(cwd ?? process.cwd(), path);
+  if (!existsSync(p)) throw new FaithfulError(`--storage-state: not found: ${path}`);
+  return p;
+}
+
 /** One browser for the whole run, launched only if something needs it. */
 export class Session {
   private renderer: Promise<Renderer> | null = null;
@@ -156,8 +163,14 @@ export class Session {
     readonly physics = false,
   ) {}
 
+  /** `--storage-state`: a signed-in session every page of the run is opened with. */
+  storageState?: string;
+
   browser(): Promise<Renderer> {
-    this.renderer ??= Renderer.launch();
+    this.renderer ??= Renderer.launch().then((r) => {
+      if (this.storageState) r.storageState = this.storageState;
+      return r;
+    });
     return this.renderer;
   }
 
@@ -217,6 +230,11 @@ export async function readDesign(
 }
 
 export interface VerifyOptions {
+  /**
+   * A Playwright storage-state file (cookies and localStorage of a signed-in session), for
+   * pages behind a login: an admin console, a member's portal. Read, never written back.
+   */
+  storageState?: string;
   design: string;
   build: string;
   viewports?: string;
@@ -373,6 +391,7 @@ async function compareAt(o: VerifyOptions, scrollY: number) {
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const [scheme] = parseColorScheme(o.colorScheme);
   const session = new Session(cfg, scheme, scrollY, o.physics === true);
+  if (o.storageState) session.storageState = sessionFile(o.storageState, o.cwd);
   // Every path is read against the caller's folder, as audit and parity read theirs: an MCP
   // server started elsewhere must not compare some other design.html.
   const cwd = o.cwd ?? process.cwd();
@@ -621,6 +640,11 @@ export async function outlineAny(target: string, cfg: FaithfulConfig, viewports?
 export const AUDIT_VIEWPORTS = '375x812,1440x900';
 
 export interface AuditRunOptions {
+  /**
+   * A Playwright storage-state file (cookies and localStorage of a signed-in session), for
+   * pages behind a login: an admin console, a member's portal. Read, never written back.
+   */
+  storageState?: string;
   target: string;
   viewports?: string;
   /** `light` (default), `dark`, or `both`: every viewport in each, screens labelled `audit@375 dark`. */
@@ -645,6 +669,7 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
   const stresses = parseStress(o.stress);
   const axeOn = o.axe !== false && cfg.audit.axe;
   const session = new Session(cfg);
+  if (o.storageState) session.storageState = sessionFile(o.storageState, o.cwd);
   try {
     const vps = parseViewports(o.viewports ?? AUDIT_VIEWPORTS, cfg.viewports);
     const target = isUrl(o.target)
@@ -707,6 +732,11 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
 // ── Parity: the same product after a refactor or a redesign ──────────────────
 
 export interface ParityOptions {
+  /**
+   * A Playwright storage-state file (cookies and localStorage of a signed-in session), for
+   * pages behind a login: an admin console, a member's portal. Read, never written back.
+   */
+  storageState?: string;
   before: string;
   after: string;
   /** Paths to compare on both, e.g. ["/", "/pricing"]. Default: the before page plus the same-origin pages it links to. */
@@ -726,6 +756,7 @@ export async function parity(o: ParityOptions): Promise<RunResult> {
   o = { ...o, before: localPath(o.before), after: localPath(o.after) };
   const cfg = o.config ?? (await loadConfig(o.cwd));
   const session = new Session(cfg);
+  if (o.storageState) session.storageState = sessionFile(o.storageState, o.cwd);
   const cwd = o.cwd ?? process.cwd();
   const targetOf = async (s: string, path?: string) =>
     isUrl(s)

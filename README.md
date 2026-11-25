@@ -235,6 +235,11 @@ baseline accepts a first build that is already wrong, and that is the case Faith
 A critical comparison, with what Faithful has taken and still lacks:
 `docs/research/ui-verify-and-the-field-2026-11.md`.
 
+Pages behind a login (an admin console, a member's portal) are checked signed in with
+`--storage-state session.json`: a Playwright storage-state file of cookies and localStorage,
+as `npx playwright codegen --save-storage=session.json <url>` or any login script writes it.
+Every page of the run opens with it; it is never written into a result.
+
 Live data that should never be judged (a clock, prices, an ad slot) can be marked
 `data-faithful-ignore`; it is left out of verify and audit on both sides.
 
