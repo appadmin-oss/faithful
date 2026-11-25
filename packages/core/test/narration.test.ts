@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { narrates, readNarration, signsOff } from '../src/narration.js';
+import { narrates, readNarration, signsOff, systemTalk } from '../src/narration.js';
 
 describe('copy that narrates the interface', () => {
   it('a sentence that explains the page to itself', () => {
@@ -74,5 +74,42 @@ describe('copy that narrates the interface', () => {
       [],
     );
     expect(r.uniformGrids).toEqual([{ grid: 'g1', n: 3, sel: 'div.card:nth-of-type(1)', opening: 'easily' }]);
+  });
+});
+
+describe('system talk: copy about how the software is built', () => {
+  const t = (text: string) => ({ sel: 'p', text });
+  it('names the sentences a builder wrote for a builder (as found on a real admin console)', () => {
+    const found = systemTalk([
+      t(
+        'The band comes from the mastery engine and is never recomputed here — a mean computed at this layer would be exactly the thin composite the coverage floor withholds.',
+      ),
+      t(
+        'Capacity null means uncapped. Zero would mean permanently full, and the schema keeps that distinction deliberately.',
+      ),
+      t(
+        'One implementation, shared with payment settlement, so the two paths cannot place the same applicant in different classes.',
+      ),
+    ]);
+    // The third is system talk too, but "implementation" is also a business word (an
+    // implementation partner): left out of the builder list, it is an accepted miss, kept here so
+    // the trade is visible rather than forgotten.
+    expect(found.map((x) => x.sentence)).toEqual([
+      expect.stringMatching(/^The band comes from the mastery engine/),
+      expect.stringMatching(/the schema keeps that distinction/),
+    ]);
+  });
+
+  it.each([
+    'Select a row to see the student’s full record.',
+    'Export the table as a spreadsheet for your accountant.',
+    'Fields marked with an asterisk are required before you can save.',
+    'Your payment is stored securely and we never share your card details.',
+    'When a class is full, new enrolments join the waiting list.',
+    // A payments homepage's sales line (stripe.com, Nov 2026): business words, not system talk.
+    'Access, secure, and govern your AI workloads across every major model and provider.',
+    'Migrate your data with our implementation partners in a week.',
+  ])('%s is how anyone describes a screen, and is left alone', (s) => {
+    expect(systemTalk([t(s)])).toEqual([]);
   });
 });

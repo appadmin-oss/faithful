@@ -134,3 +134,38 @@ export function readNarration(blurbs: Blurb[], notes: { sel: string; text: strin
   const signoffs = notes.filter((x) => signsOff(x.text));
   return { narrated, introduced: blurbs.length, uniformGrids, signoffs };
 }
+
+/*
+ * System talk: copy that describes how the software is BUILT rather than what the reader can do
+ * ("One implementation, shared with payment settlement, so the two paths cannot…"; "a mean
+ * computed at this layer would be exactly the thin composite…"). Nielsen's second heuristic,
+ * match between the system and the real world: speak the users' language, not the system's.
+ * https://www.nngroup.com/articles/ten-usability-heuristics/
+ *
+ * A sentence is system talk when it uses one word only a builder says (schema, null, payload…),
+ * or two words that are a builder's in combination (a "row" and a "column" in a sentence about
+ * a "computed" value). A single "table" or "row" is how anyone describes a screen, and is not.
+ * Words a business also says (provider, API, implementation, migration, endpoint) are left out:
+ * "every major model and provider" on a payments homepage is a sales line, not system talk.
+ */
+const BUILDER =
+  /\b(?:schema|null|handler|idempotent|payload|enum|refactor|codebase|regex|boolean|foreign key|primary key|recompute[ds]?|denormali[sz]ed|upsert)\b/i;
+const SYSTEM =
+  /\b(?:engine|layer|column|row|table|database|query|cache|composite|computed|registry|lib|module|function|field|flag|the code)\b/gi;
+
+/** Sentences of a page's text that describe the software's construction. */
+export function systemTalk(texts: { sel: string; text: string }[]): { sel: string; sentence: string }[] {
+  const out: { sel: string; sentence: string }[] = [];
+  for (const t of texts) {
+    for (const sentence of t.text.split(/(?<=[.!?])\s+/)) {
+      if (sentence.length < 30 || LEGAL.test(sentence)) continue;
+      const strong = BUILDER.test(sentence);
+      const weak = new Set((sentence.match(SYSTEM) ?? []).map((w) => w.toLowerCase())).size;
+      if (strong || weak >= 2) {
+        out.push({ sel: t.sel, sentence: sentence.trim() });
+        break;
+      }
+    }
+  }
+  return out;
+}

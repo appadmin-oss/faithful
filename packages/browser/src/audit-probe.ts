@@ -1310,6 +1310,8 @@ export function auditProbe(): AuditFacts {
     palette,
     forms,
     formLayouts,
+    // Code on the page means its readers build software: system vocabulary is their language.
+    codeBlocks: document.querySelectorAll('pre, code').length,
     closedDisclosures: Array.from(document.querySelectorAll('details:not([open])')).filter(
       (d) => !d.closest('[aria-hidden="true"],[inert],[hidden]'),
     ).length,

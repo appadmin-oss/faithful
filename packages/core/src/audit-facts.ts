@@ -103,6 +103,8 @@ export interface AuditFacts {
     fields: { name: string; type: string; required: boolean; label: string }[];
     submits: string[];
   }[];
+  /** <pre> and <code> elements: a page with several is written for developers. */
+  codeBlocks?: number;
   /** Closed <details> a reader can open (the `open` pass runs only when there are some). */
   closedDisclosures?: number;
   /** Each visible form's fields, boxes and labels, for form design (form-design.ts). */

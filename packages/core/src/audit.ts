@@ -23,7 +23,7 @@ import { fitSpacingGrid, fitTypeScale, hierarchyInversions, nearMissEdges } from
 import type { Finding, Kind, Severity } from './findings.js';
 import { expectedChars, judgeForm } from './form-design.js';
 import { MOVEMENT } from './motion.js';
-import { readNarration } from './narration.js';
+import { readNarration, systemTalk } from './narration.js';
 
 export type { AuditFacts, AxeFacts, AxeRule } from './audit-facts.js';
 
@@ -326,6 +326,17 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
         : `${g.n} cards in one grid each explain themselves: let the headings stand alone, or say what each one is for`,
       g.sel,
     );
+  // Developer documentation (code on the page) speaks its readers' language when it says endpoint.
+  const talk = (f.codeBlocks ?? 0) >= 3 ? [] : systemTalk(f.texts);
+  if (talk.length) {
+    const ex = talk[0] as (typeof talk)[number];
+    add(
+      'wording',
+      talk.length >= 2 ? 'warn' : 'info',
+      `${talk.length === 1 ? 'a sentence describes' : `${talk.length} sentences describe`} how the software is built, not what the reader can do, e.g. "${ex.sentence.slice(0, 80)}": say what it means for them, or cut it`,
+      ex.sel,
+    );
+  }
   if (nar.signoffs.length)
     add(
       'wording',
@@ -380,6 +391,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
     tell('headings explained by the sentence under them', nar.narrated.length, nar.narrated[0]?.sel);
   if (nar.uniformGrids.length)
     tell('cards that each explain themselves', nar.uniformGrids.length, nar.uniformGrids[0]?.sel);
+  if (talk.length >= 3) tell('copy that explains how the software is built', talk.length, talk[0]?.sel);
   if (nar.signoffs.length >= 2) tell('notes that vouch for the page', nar.signoffs.length, nar.signoffs[0]?.sel);
   if (s.glass.length > 2) tell('frosted-glass panels', s.glass.length, s.glass[0]);
   if (s.badgeAboveH1) tell('a pill badge above the headline', 1, s.badgeAboveH1);
