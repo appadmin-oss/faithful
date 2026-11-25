@@ -103,6 +103,29 @@ export interface AuditFacts {
     fields: { name: string; type: string; required: boolean; label: string }[];
     submits: string[];
   }[];
+  /** Closed <details> a reader can open (the `open` pass runs only when there are some). */
+  closedDisclosures?: number;
+  /** Each visible form's fields, boxes and labels, for form design (form-design.ts). */
+  formLayouts?: {
+    sel: string;
+    width: number;
+    fields: {
+      sel: string;
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      font: number;
+      type: string;
+      maxlength?: number;
+      max?: string;
+      step?: string;
+      value?: string;
+      autocomplete?: string;
+      options?: string[];
+      label?: { text: string; x: number; y: number; w: number; h: number };
+    }[];
+  }[];
   /** ARIA landmark roles present (banner, navigation, main, contentinfo, search, …). */
   landmarks: string[];
   headings: { sel: string; level: number; text: string; size?: number }[];

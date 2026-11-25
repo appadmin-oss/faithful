@@ -179,6 +179,11 @@ page and needs no `--screen`.
   spacing is off the 8px grid: use 12px or 16px"; "starts 3px right of the edge 9 elements
   share"); a heading drawn larger than the level above it is named; one note states the
   system so an agent adding to the page uses its numbers.
+- **Form design, measured**: a field far wider than what goes in it (Baymard: size fields with a
+  known length to that length; GOV.UK sizes inputs in characters), a form laid out in columns
+  (Baymard and CXL: more skipped and misread fields, slower), a label nearer the field above
+  than its own (Gestalt proximity, NN/g), and a unit only in the label. Collapsed sections are
+  opened and judged too (the `open` pass), because a reader opens them.
 - **Layout faults judged by what they are**: text cut off or overlapping inside a picture of
   UI is not a layout error, but a screen reader reading it and a keyboard tabbing into it is,
   once per picture; a frozen marquee, content hidden right now, a stacked deck, a heading over

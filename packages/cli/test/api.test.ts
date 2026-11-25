@@ -65,8 +65,8 @@ describe('--color-scheme', () => {
 });
 
 describe('--stress', () => {
-  it('a comma list (CLI) or an array (MCP); enlarged text and 320px reflow unless told otherwise; anything else is a bad call', () => {
-    expect(parseStress(undefined)).toEqual(['zoom', 'reflow']);
+  it('a comma list (CLI) or an array (MCP); enlarged text, 320px reflow and collapsed sections opened unless told otherwise; anything else is a bad call', () => {
+    expect(parseStress(undefined)).toEqual(['zoom', 'reflow', 'open']);
     expect(parseStress('none')).toEqual([]);
     expect(parseStress('expand,RTL, spacing,rtl')).toEqual(['expand', 'rtl', 'spacing']);
     expect(parseStress(['spacing', 'zoom'])).toEqual(['spacing', 'zoom']);

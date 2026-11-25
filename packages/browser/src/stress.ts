@@ -119,3 +119,18 @@ export function setSpacing(): { applied: boolean } {
   const ls = Number.parseFloat(getComputedStyle(document.body).letterSpacing) || 0;
   return { applied: Math.abs(ls - 0.12 * fs) < 0.5 };
 }
+
+/**
+ * Every collapsed <details> opened: what a reader sees once they open a section. A settings form
+ * grouped into closed sections passes untouched until then (MAM Academy, Nov 2026: its fields
+ * were invisible to every check). Nothing hidden from everyone is opened.
+ */
+export function openDisclosures(): { applied: boolean; nodes: number } {
+  let n = 0;
+  for (const d of Array.from(document.querySelectorAll('details:not([open])'))) {
+    if (d.closest('[aria-hidden="true"],[inert],[hidden]')) continue;
+    (d as HTMLDetailsElement).open = true;
+    n++;
+  }
+  return { applied: true, nodes: n };
+}

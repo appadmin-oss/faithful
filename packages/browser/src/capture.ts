@@ -23,7 +23,7 @@ import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
 import { type MotionReading, stampMotion } from './motion.js';
 import { recordPhysics } from './physics.js';
-import { expandText, setRtl, setSpacing, zoomText } from './stress.js';
+import { expandText, openDisclosures, setRtl, setSpacing, zoomText } from './stress.js';
 
 /**
  * The device a viewport stands for, as the browser must emulate it (measured in Chromium):
@@ -39,9 +39,9 @@ export function deviceContext(v: Viewport, asPage: boolean): { hasTouch: boolean
 }
 
 /** `faithful audit --stress`: what the page is put through before it is measured. */
-export type Stress = 'expand' | 'rtl' | 'spacing' | 'zoom' | 'reflow';
+export type Stress = 'expand' | 'rtl' | 'spacing' | 'zoom' | 'reflow' | 'open';
 /** Passes that change the page; `reflow` changes the window instead (320 CSS px, WCAG 1.4.10). */
-const STRESS = { expand: expandText, rtl: setRtl, spacing: setSpacing, zoom: zoomText } as const;
+const STRESS = { expand: expandText, rtl: setRtl, spacing: setSpacing, zoom: zoomText, open: openDisclosures } as const;
 export const REFLOW_WIDTH = 320;
 
 export interface CaptureOptions {

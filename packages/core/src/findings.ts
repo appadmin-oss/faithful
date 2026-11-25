@@ -58,6 +58,7 @@ export const KINDS = {
   heading: 'Give the page one h1 that names it, and do not skip heading levels.',
   dead: 'Point it at a real place, or make it a button if it acts: a link that goes nowhere is a dead end.',
   consistency: 'Use the value the page already uses: this is a near-copy of it, made once.',
+  form: 'Size each field to what goes in it, keep the form to one column, and put each label nearest its own field.',
   motion:
     "Match the design's motion: the same properties, duration, easing, delay and repeats (from motion tokens, not by eye).",
 } as const;

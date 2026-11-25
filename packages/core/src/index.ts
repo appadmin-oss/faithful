@@ -7,6 +7,7 @@ export * from './config.js';
 export * from './design-sense.js';
 export * from './deviations.js';
 export * from './findings.js';
+export * from './form-design.js';
 export * from './geometry.js';
 export * from './guards.js';
 export * from './inventory.js';

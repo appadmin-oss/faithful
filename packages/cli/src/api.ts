@@ -120,7 +120,7 @@ export function parseColorScheme(s: string | undefined, allowBoth = false): Colo
  * that only holds at the author's own text size and window is the fault no screenshot shows
  * (MAM Academy, Nov 2026: a nav that wrapped and cut off its last button at 175% text).
  */
-export const DEFAULT_STRESS: readonly StressMode[] = ['zoom', 'reflow'];
+export const DEFAULT_STRESS: readonly StressMode[] = ['zoom', 'reflow', 'open'];
 
 /**
  * `--stress`: the i18n / resilience passes an audit runs IN ADDITION to the normal one, as a
@@ -693,6 +693,8 @@ export async function audit(o: AuditRunOptions): Promise<RunResult> {
         for (const mode of stresses) {
           // Reflow narrows the window to 320, whatever it was: once per colour scheme, from the narrowest.
           if (mode === 'reflow' && vp !== narrowest) continue;
+          // Opening sections costs a pass only on a page that has a closed one.
+          if (mode === 'open' && !facts.closedDisclosures) continue;
           const screen = `audit@${vp.width}${named} ${mode}`;
           let s: ScreenResult;
           try {

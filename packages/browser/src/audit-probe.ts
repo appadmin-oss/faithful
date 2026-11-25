@@ -659,6 +659,67 @@ export function auditProbe(): AuditFacts {
       .trim()
       .slice(0, 60);
   };
+  /*
+   * Each visible form's layout, for form design (core/form-design.ts): every field's box, its
+   * font size, what its markup says it holds, and its label's box. Pictures of UI and fields not
+   * on screen (a closed group) are left out.
+   */
+  const formLayouts: NonNullable<AuditFacts['formLayouts']> = [];
+  for (const form of Array.from(document.forms).slice(0, 20)) {
+    if (!shown(form) || decorativeOf(form)) continue;
+    const fr = form.getBoundingClientRect();
+    const fields: NonNullable<AuditFacts['formLayouts']>[number]['fields'] = [];
+    for (const el of Array.from(form.elements)) {
+      if (!el.matches('input,select,textarea') || fields.length >= 120) continue;
+      const inp = el as HTMLInputElement;
+      if (/^(hidden|submit|button|reset|image|checkbox|radio|file|color|range)$/.test(inp.type)) continue;
+      if (!shown(el)) continue;
+      const r = el.getBoundingClientRect();
+      const lab = (inp.labels?.[0] as HTMLElement | undefined) ?? null;
+      // The label's TEXT box, not the <label>: a label that wraps its field is as tall as both.
+      const textOf = (l: HTMLElement) => {
+        const span = Array.from(l.querySelectorAll('span,strong,b')).find((x) => (x.textContent ?? '').trim()) as
+          | HTMLElement
+          | undefined;
+        return span && !span.contains(el) ? span : l.contains(el) ? null : l;
+      };
+      const lt = lab ? textOf(lab) : null;
+      const lr = lt?.getBoundingClientRect();
+      fields.push({
+        sel: path(el),
+        x: r.left + window.scrollX,
+        y: r.top + window.scrollY,
+        w: r.width,
+        h: r.height,
+        font: Number.parseFloat(cs(el).fontSize) || 16,
+        type: el.tagName === 'SELECT' ? 'select' : el.tagName === 'TEXTAREA' ? 'textarea' : inp.type,
+        ...(inp.maxLength > 0 ? { maxlength: inp.maxLength } : {}),
+        ...(inp.getAttribute('max') ? { max: inp.getAttribute('max') as string } : {}),
+        ...(inp.getAttribute('step') ? { step: inp.getAttribute('step') as string } : {}),
+        ...(el.tagName === 'INPUT' && inp.value ? { value: inp.value.slice(0, 40) } : {}),
+        ...(inp.getAttribute('autocomplete') ? { autocomplete: inp.getAttribute('autocomplete') as string } : {}),
+        ...(el.tagName === 'SELECT'
+          ? {
+              options: Array.from((el as HTMLSelectElement).options)
+                .slice(0, 40)
+                .map((o) => o.text.trim()),
+            }
+          : {}),
+        ...(lt && lr && lr.width > 0
+          ? {
+              label: {
+                text: short(lt.textContent ?? '', 60),
+                x: lr.left + window.scrollX,
+                y: lr.top + window.scrollY,
+                w: lr.width,
+                h: lr.height,
+              },
+            }
+          : {}),
+      });
+    }
+    if (fields.length) formLayouts.push({ sel: path(form), width: fr.width, fields });
+  }
   const forms: AuditFacts['forms'] = Array.from(document.forms)
     .slice(0, 30)
     .map((form) => ({
@@ -1244,6 +1305,10 @@ export function auditProbe(): AuditFacts {
     doc: docMeta,
     palette,
     forms,
+    formLayouts,
+    closedDisclosures: Array.from(document.querySelectorAll('details:not([open])')).filter(
+      (d) => !d.closest('[aria-hidden="true"],[inert],[hidden]'),
+    ).length,
     landmarks,
     headings,
     fontSizes,

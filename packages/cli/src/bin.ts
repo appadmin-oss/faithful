@@ -41,7 +41,7 @@ const HELP = `faithful — prove a build matches its design
   faithful verify                          every page in faithful.config.json "checks", one verdict
   faithful verify <design> --build <url|file> [--scroll 0,900] [--physics] [--screen <id>] [--viewports 1440x900,390x844] [--also <tokens|copy|DESIGN.md>…] [--color-scheme light|dark] [--format text|json] [--max 8]
   faithful audit <url|file> [--viewports …] [--color-scheme light|dark|both]  judge a page with no design: layout faults, contrast, WCAG (axe-core), readability, AI-slop tells
-      [--stress zoom,reflow,expand,rtl,spacing|none]  extra passes: text at 200%, 320px wide (both by default),
+      [--stress zoom,reflow,open,expand,rtl,spacing|none]  extra passes: text at 200%, 320px wide, collapsed sections opened (all three by default),
                                            text 1.3–2× longer, right-to-left, WCAG text spacing
       [--no-axe]                           skip axe-core's WCAG 2.2 A/AA rules (or config audit.axe: false)
   faithful parity --before <a> --after <b>  after a refactor or redesign: can users still do everything they could?

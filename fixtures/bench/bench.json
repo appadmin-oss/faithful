@@ -42,6 +42,10 @@
     ],
     "bad-picture.html": [
       "a11y"
+    ],
+    "good-form.html": [],
+    "bad-form.html": [
+      "form"
     ]
   }
 }

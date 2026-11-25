@@ -21,6 +21,7 @@ import { contrastRatio, deltaE, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
 import { fitSpacingGrid, fitTypeScale, hierarchyInversions, nearMissEdges } from './design-sense.js';
 import type { Finding, Kind, Severity } from './findings.js';
+import { expectedChars, judgeForm } from './form-design.js';
 import { MOVEMENT } from './motion.js';
 import { readNarration } from './narration.js';
 
@@ -341,6 +342,9 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
 
   // ── Design sense: the page's own system, fitted, and what misses it ──
   designSense(f, add);
+
+  // ── Form design: field widths, columns, label proximity, units (form-design.ts) ──
+  formDesign(f, add);
 
   // ── Motion the reader asked to be spared ──
   reducedMotion(f, add);
@@ -676,6 +680,67 @@ function designSense(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?:
   if (said.length) add('consistency', 'info', `the page's system: ${said.join('; ')}. New elements should use it`);
 }
 
+/** Form design, judged per form from what was measured (form-design.ts has the rules and sources). */
+function formDesign(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
+  for (const form of f.formLayouts ?? []) {
+    const v = judgeForm(
+      {
+        sel: form.sel,
+        width: form.width,
+        fields: form.fields.map((x) => {
+          const expect = expectedChars(x);
+          return {
+            sel: x.sel,
+            x: x.x,
+            y: x.y,
+            w: x.w,
+            h: x.h,
+            font: x.font,
+            ...(expect !== undefined ? { expect } : {}),
+            ...(x.label ? { label: x.label } : {}),
+            ...(x.type === 'number' ? { numeric: true } : {}),
+          };
+        }),
+      },
+      f.viewport.width,
+    );
+    if (v.oversized.length) {
+      const e = v.oversized[0] as (typeof v.oversized)[number];
+      add(
+        'form',
+        'warn',
+        `${v.oversized.length} field${v.oversized.length === 1 ? ' is' : 's are'} far wider than what goes in ${v.oversized.length === 1 ? 'it' : 'them'}, e.g. ${e.label ? `"${e.label}" ` : ''}holds about ${e.expect} characters in a ${e.px}px field (room for ${e.chars}): size each to its content`,
+        e.sel,
+      );
+    }
+    if (v.columns)
+      add(
+        'form',
+        'warn',
+        `the form is laid out in columns (${v.columns.multiRows} of ${v.columns.rows} rows hold two or more fields): people skip and misread fields across columns; use one column, keeping only parts of one thing (a date, a city and postcode) on a line`,
+        v.columns.sel,
+      );
+    if (v.ambiguous.length) {
+      const a = v.ambiguous[0] as (typeof v.ambiguous)[number];
+      add(
+        'form',
+        'warn',
+        `${v.ambiguous.length} label${v.ambiguous.length === 1 ? ' sits' : 's sit'} nearer the field above than ${v.ambiguous.length === 1 ? 'its' : 'their'} own, e.g. "${a.label}" (${a.above}px from the field above, ${a.own}px from its own): put more space between fields than between a label and its field`,
+        a.sel,
+      );
+    }
+    if (v.unitInLabel.length) {
+      const u = v.unitInLabel[0] as (typeof v.unitInLabel)[number];
+      add(
+        'form',
+        'info',
+        `${v.unitInLabel.length} number field${v.unitInLabel.length === 1 ? ' names its' : 's name their'} unit only in the label (e.g. "${u.label}"): show it beside the number`,
+        u.sel,
+      );
+    }
+  }
+}
+
 function reducedMotion(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
   const list = f.reducedMotion ?? [];
   const moves = (k: string | undefined) => !!k && k.split(',').some((p) => MOVEMENT.test(p.trim()));
@@ -968,11 +1033,14 @@ export const STRESS_CAUSE = {
   spacing: 'with WCAG 1.4.12 text spacing',
   zoom: 'with text alone at 200%',
   reflow: 'at 320px wide (WCAG 1.4.10 reflow)',
+  open: 'with every collapsed section opened',
 } as const;
 export type StressMode = keyof typeof STRESS_CAUSE;
 
 /** The layout faults a stress pass is for; the rest of the audit is the normal pass's job. */
 const STRESS_KINDS: ReadonlySet<Kind> = new Set<Kind>(['clipped', 'overlap', 'overflow']);
+/** Opening collapsed sections reveals CONTENT, not a layout condition: judge it as content. */
+const OPEN_KINDS: ReadonlySet<Kind> = new Set<Kind>(['clipped', 'overlap', 'overflow', 'form', 'contrast', 'target']);
 
 /**
  * Keep only what a stress pass ADDS over the normal pass at the same viewport: a layout fault
@@ -984,7 +1052,7 @@ export function stressDelta(normal: ScreenResult, stressed: ScreenResult, mode: 
   const key = (f: Finding) => (f.kind === 'overflow' ? 'overflow' : `${f.kind}|${f.buildId ?? ''}`);
   const known = new Set(normal.findings.map(key));
   const findings = stressed.findings
-    .filter((f) => STRESS_KINDS.has(f.kind) && !known.has(key(f)))
+    .filter((f) => (mode === 'open' ? OPEN_KINDS : STRESS_KINDS).has(f.kind) && !known.has(key(f)))
     .map((f) => ({
       ...f,
       // Text enlarged alone, the layout held, is harsher than WCAG 1.4.4 asks (page zoom meets

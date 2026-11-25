@@ -110,7 +110,9 @@ describe('faithful (bin)', () => {
     expect(refused.out).toMatch(/W unmeasured: the rtl pass could not be applied/);
     const bad = run(d, 'audit', 'i18n.html', '--stress', 'expand,huge');
     expect(bad.code).toBe(2);
-    expect(bad.err).toMatch(/--stress takes a comma list of expand, rtl, spacing, zoom, reflow; got "expand,huge"/);
+    expect(bad.err).toMatch(
+      /--stress takes a comma list of expand, rtl, spacing, zoom, reflow, open; got "expand,huge"/,
+    );
   }, 180_000);
 
   it('axe-core: a fault only axe sees fails the audit; --no-axe or audit.axe: false skips it and says so', () => {
