@@ -459,7 +459,10 @@ nav{height:48px;overflow:hidden;white-space:nowrap}nav a{display:inline-block;pa
   it('a bar that fits at the author’s size loses its last entry at 200% text, and only that pass says so', async () => {
     const { normal, delta } = await pass(BAR, { width: 1440, height: 900 }, 'zoom');
     expect(normal.findings.filter((x) => x.kind === 'clipped')).toEqual([]);
-    expect(delta.findings.some((x) => x.kind === 'clipped' && /text at 200%/.test(x.detail))).toBe(true);
+    // Reported, but as a warning: text enlarged alone (Android font scale, iOS text size) breaks
+    // it, which WCAG 1.4.4 itself does not require when page zoom works.
+    const hit = delta.findings.find((x) => x.kind === 'clipped' && /text alone at 200%/.test(x.detail));
+    expect(hit?.severity).toBe('warn');
   }, 90_000);
 
   it('a page that fits 375 but not 320 scrolls sideways only in the reflow pass', async () => {
@@ -620,5 +623,101 @@ describe('copy that narrates the interface', () => {
 <h2>Contact</h2><p>Phone 0300 222 0000, Monday to Friday, 8am to 8pm.</p></main>
 <footer><p>All content is available under the Open Government Licence. © Crown copyright</p></footer></body></html>`);
     expect(f.filter((x) => /explained by|open the same way|vouch|explain themselves/.test(x.detail))).toEqual([]);
+  }, 60_000);
+});
+
+describe('a layout fault judged by what it is', () => {
+  const page = (body: string, css = '') =>
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ctx</title><style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}${css}</style></head><body><main><h1>Context</h1>${body}</main></body></html>`;
+  const audit = async (body: string, css = '') => {
+    const res = scoreAudit(
+      await r.audit({ html: page(body, css), baseDir: FIX }, { width: 1024, height: 800 }, { axe: false }),
+      's',
+    );
+    mergeViewports([res]);
+    return res.findings;
+  };
+  const said = (fs: { severity: string; kind: string; detail: string }[]) =>
+    fs.map((f) => `${f.severity} ${f.kind} ${f.detail}`);
+  const TWO = '<div class="pair"><p>Quarterly revenue report</p><p>Annual growth summary</p></div>';
+  const PAIR = '.pair{position:relative;height:60px}.pair p{position:absolute;top:0;left:0;margin:0}';
+
+  it('text drawn over text is an error; the same two under an opaque card are a stack, said as by design', async () => {
+    expect(said(await audit(TWO, PAIR))).toContainEqual(
+      expect.stringMatching(/^error overlap "Quarterly revenue report" is drawn over/),
+    );
+    const stacked = said(await audit(TWO, `${PAIR}.pair p{background:#fff;padding:8px}`));
+    expect(stacked.filter((x) => /^error overlap/.test(x))).toEqual([]);
+    expect(stacked).toContainEqual('info overlap set aside as by design: 1 under an opaque card (a stack or deck)');
+  }, 60_000);
+
+  it('text in a picture of UI is not a layout error; that a screen reader and a keyboard reach it is', async () => {
+    // A whole small app: a sidebar of rows, the two overlapping lines and a toolbar.
+    const rows = Array.from({ length: 30 }, (_, i) => `<div class="row">Issue ${i}</div>`).join('');
+    const pic = `<div class="mock"><nav>${rows}</nav>${TWO}<button>Ship</button><button>Merge</button></div>`;
+    const out = said(
+      await audit(
+        pic,
+        `${PAIR}.mock{transform:scale(.5);transform-origin:0 0}.mock button{width:12px;height:12px;padding:0;font-size:4px}`,
+      ),
+    );
+    expect(out.filter((x) => /^error (overlap|clipped)|^warn target/.test(x))).toEqual([]);
+    expect(out).toContainEqual(
+      expect.stringMatching(
+        /^warn a11y a picture of UI is exposed as UI \(a whole interface scaled to 50%\): \d+ texts cut off or drawn over each other in it .*; 2 controls in it that a keyboard tabs into/,
+      ),
+    );
+    // Recall: the same two buttons at full size, as real UI, still fail their size.
+    const real = said(
+      await audit(
+        '<button style="width:12px;height:12px;padding:0">x</button> <button style="width:12px;height:12px;padding:0">y</button>',
+      ),
+    );
+    expect(real.filter((x) => /^warn target/.test(x)).length).toBeGreaterThan(0);
+  }, 60_000);
+
+  it('content hidden right now is a note to check later, not a fault now', async () => {
+    const out = said(await audit(`<div style="opacity:0">${TWO}</div>`, PAIR));
+    expect(out.filter((x) => /^error/.test(x))).toEqual([]);
+    expect(out).toContainEqual(expect.stringMatching(/^info hidden 2 text blocks are invisible \(opacity 0\)/));
+    // Clipped text in an inert panel (a closed drawer): checked when it opens.
+    const drawer = said(
+      await audit(
+        '<div inert class="d"><p>Delivery and returns information</p></div>',
+        '.d{width:80px;height:20px;overflow:hidden}',
+      ),
+    );
+    expect(drawer.filter((x) => /^error/.test(x))).toEqual([]);
+    expect(drawer).toContainEqual(
+      expect.stringMatching(/^info clipped 1 text is cut off or overlapping in content hidden right now/),
+    );
+  }, 60_000);
+
+  it('a marquee frozen with its words cut off is a note with the fix; a cut-off button label is an error, once ×3', async () => {
+    const items = 'Ships weekly · Trusted by teams · Open source · '.repeat(2);
+    const out = said(
+      await audit(`<div class="mq"><span>${items}</span></div>`, '.mq{width:200px;overflow:hidden;white-space:nowrap}'),
+    );
+    expect(out).toContainEqual(expect.stringMatching(/^info clipped a marquee stands still with "Ships weekly/));
+    expect(out.filter((x) => /^error clipped/.test(x))).toEqual([]);
+    const slide = '<div class="s"><a class="b"><span>Read the whole story</span></a></div>';
+    const three = said(await audit(slide.repeat(3), '.b{display:block;width:60px;overflow:hidden;white-space:nowrap}'));
+    expect(three.filter((x) => /^error clipped/.test(x))).toEqual([
+      expect.stringMatching(/^error clipped "Read the whole story" is cut off by \d+px \(right edge of its box\) ×3$/),
+    ]);
+  }, 60_000);
+
+  it('a heading laid over a copy of itself, and a field over its floating label, are by design', async () => {
+    const out = said(
+      await audit(
+        `<div class="hero"><h2 class="a">Financial infrastructure to grow</h2><h2 class="b">Financial infrastructure to grow</h2></div>
+<div class="fl"><label for="em">Enter your email</label><input id="em"></div>`,
+        '.hero{position:relative;height:80px}.hero h2{position:absolute;top:0;margin:0}.b{color:transparent;background:#fff}.fl{position:relative}.fl label{position:absolute;top:8px;left:8px}.fl input{position:relative;width:240px;height:40px;background:#fff}',
+      ),
+    );
+    expect(out.filter((x) => /^(error|warn) overlap/.test(x))).toEqual([]);
+    expect(out).toContainEqual(
+      expect.stringMatching(/^info overlap set aside as by design: .*(layered|floating label)/),
+    );
   }, 60_000);
 });

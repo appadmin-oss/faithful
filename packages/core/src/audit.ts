@@ -121,15 +121,7 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
       f.overflow[0]?.sel,
     );
   }
-  for (const c of f.clipped)
-    add(
-      'clipped',
-      'error',
-      `"${c.text}" is cut off by ${c.by}px (${c.axis === 'y' ? 'bottom' : (c.side ?? 'right')} edge of its box)`,
-      c.sel,
-    );
-  for (const o of f.overlaps) add('overlap', 'error', `"${o.text}" is drawn over "${o.other}" (${o.b})`, o.a);
-  for (const c of f.covered) add('overlap', 'warn', `"${c.text}" is covered by ${c.by}`, c.sel);
+  layoutFindings(f, add);
 
   for (const t of f.texts) {
     const s = t.text.trim();
@@ -785,6 +777,23 @@ function navLogic(f: AuditFacts, navMax: number, add: (k: Kind, s: Severity, d: 
  */
 export function mergeViewports(results: ScreenResult[]): void {
   const seen = new Map<string, Finding>();
+  // The same text cut off (or drawn over) in several boxes of ONE screen is one fault repeated
+  // — a button on every slide of a carousel — said once, ×n.
+  for (const r of results) {
+    const reps = new Map<string, { f: Finding; n: number }>();
+    r.findings = r.findings.filter((f) => {
+      if (f.kind !== 'clipped' && f.kind !== 'overlap') return true;
+      const k = `${f.kind}|${f.severity}|${f.detail.replace(/\(([^()]*>[^()]*)\)$/, '')}`;
+      const had = reps.get(k);
+      if (!had) {
+        reps.set(k, { f, n: 1 });
+        return true;
+      }
+      had.n++;
+      return false;
+    });
+    for (const { f, n } of reps.values()) if (n > 1) f.detail += ` ×${n}`;
+  }
   let summary: { f: Finding; n: number; owner: ScreenResult } | undefined;
   for (const r of results) {
     r.findings = r.findings.filter((f) => {
@@ -799,14 +808,28 @@ export function mergeViewports(results: ScreenResult[]): void {
       // Counts that differ by width (how many texts share a colour) do not make a second fault.
       // An axe rule is one fault per page whichever element it meets first at each width.
       const axeRule = f.kind === 'a11y' ? /^[^:]+/.exec(f.detail)?.[0] : undefined;
-      const detail = f.detail.replace(
+      // One fault seen by several stress passes (the same overlap at 200% text and at 320px)
+      // is one finding that names every pass, not one per pass.
+      const cause = Object.values(STRESS_CAUSE).find((c) => f.detail.startsWith(`${c}: `));
+      const body = cause ? f.detail.slice(cause.length + 2) : f.detail;
+      const detail = body.replace(
         /\d+px wide in a \d+px screen|×\d+ texts|for \d+ texts?|\d+ more|\(\d+ texts\)/g,
         '#',
       );
-      const key = axeRule ? `a11y|${f.severity}|${axeRule}` : `${f.kind}|${f.buildId ?? ''}|${detail}`;
+      const key = axeRule
+        ? `a11y|${f.severity}|${axeRule}`
+        : `${f.kind}|${f.buildId ?? ''}|${cause ? 'stress' : 'normal'}|${detail}`;
       const first = seen.get(key);
       if (first) {
         if (f.viewport && first.viewport && !first.viewport.includes(f.viewport)) first.viewport += `,${f.viewport}`;
+        if (cause) {
+          const had = Object.values(STRESS_CAUSE).filter((c) => first.detail.includes(c));
+          if (!had.includes(cause)) {
+            const prefix = [...had, cause].join(' and ');
+            first.detail = `${prefix}: ${body}`;
+          }
+          if (f.severity === 'error') first.severity = 'error';
+        }
         return false;
       }
       seen.set(key, f);
@@ -815,12 +838,85 @@ export function mergeViewports(results: ScreenResult[]): void {
   }
 }
 
+/**
+ * Clipped, overlapping and covered text, judged by what it IS (the probe's `ctx`), never
+ * silently dropped:
+ *  - a reader-facing fault is an error (a cover a warning); the same button cut off on three
+ *    carousel slides is one fault, ×3 (said by mergeViewports, after the stress passes subtract);
+ *  - text in a picture of UI is not a layout fault, but a screen reader reads every word of it,
+ *    so it is ONE warning to hide the picture from assistive technology (or make it real text);
+ *  - a marquee frozen by reduced motion with its words cut off is a note, with the fix;
+ *  - content hidden right now is a note to check when it is shown;
+ *  - occluded, layered and floating-label cases are by design, and are said in one note so the
+ *    reader can see what was set aside and why.
+ */
+function layoutFindings(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
+  const edge = (c: AuditFacts['clipped'][number]) => (c.axis === 'y' ? 'bottom' : (c.side ?? 'right'));
+  const decorative: { text: string; why?: string; sel: string }[] = [];
+  const hidden: { text: string; sel: string }[] = [];
+  const marquee: { text: string; sel: string }[] = [];
+  const bydesign = { stacked: 0, layered: 0, label: 0 };
+  for (const c of f.clipped) {
+    if (c.ctx === 'decorative') decorative.push({ text: c.text, sel: c.sel, ...(c.why ? { why: c.why } : {}) });
+    else if (c.ctx === 'hidden') hidden.push({ text: c.text, sel: c.sel });
+    else if (c.ctx === 'marquee') marquee.push({ text: c.text, sel: c.sel });
+    else add('clipped', 'error', `"${c.text}" is cut off by ${c.by}px (${edge(c)} edge of its box)`, c.sel);
+  }
+  for (const o of f.overlaps) {
+    if (o.ctx === 'decorative') decorative.push({ text: o.text, sel: o.a, ...(o.why ? { why: o.why } : {}) });
+    else if (o.ctx === 'hidden') hidden.push({ text: o.text, sel: o.a });
+    else if (o.ctx === 'stacked' || o.ctx === 'layered') bydesign[o.ctx]++;
+    else add('overlap', 'error', `"${o.text}" is drawn over "${o.other}" (${o.b})`, o.a);
+  }
+  for (const c of f.covered) {
+    if (c.ctx === 'layered' || c.ctx === 'label') bydesign[c.ctx]++;
+    else if (c.ctx === 'decorative') decorative.push({ text: c.text, sel: c.sel });
+    else add('overlap', 'warn', `"${c.text}" is covered by ${c.by}`, c.sel);
+  }
+  const pics = f.pictures ?? [];
+  if (decorative.length || pics.length) {
+    const d = decorative[0];
+    const ctl = pics.reduce((n, p) => n + p.controls, 0);
+    const what = [
+      d &&
+        `${decorative.length} text${decorative.length === 1 ? '' : 's'} cut off or drawn over each other in it (e.g. "${d.text}"), which a screen reader reads out`,
+      ctl && `${ctl} control${ctl === 1 ? '' : 's'} in it that a keyboard tabs into`,
+    ].filter(Boolean);
+    add(
+      'a11y',
+      'warn',
+      `a picture of UI is exposed as UI (${d?.why ?? pics[0]?.why}): ${what.join('; ')}. If it is a picture, make it inert with aria-hidden="true" (or role="img" and one aria-label); if it is content, lay it out as content`,
+      d?.sel ?? pics[0]?.sel,
+    );
+  }
+  if (marquee.length)
+    add(
+      'clipped',
+      'info',
+      `a marquee stands still with "${marquee[0]?.text}" cut off at its edge: that is what a reader who asked for less motion sees; under prefers-reduced-motion, show its items as a static list that fits`,
+      marquee[0]?.sel,
+    );
+  if (hidden.length)
+    add(
+      'clipped',
+      'info',
+      `${hidden.length} text${hidden.length === 1 ? ' is' : 's are'} cut off or overlapping in content hidden right now (e.g. "${hidden[0]?.text}"): check ${hidden.length === 1 ? 'it' : 'them'} in the state that shows ${hidden.length === 1 ? 'it' : 'them'}`,
+      hidden[0]?.sel,
+    );
+  const why = [
+    bydesign.stacked && `${bydesign.stacked} under an opaque card (a stack or deck)`,
+    bydesign.layered && `${bydesign.layered} layered within one heading or control`,
+    bydesign.label && `${bydesign.label} a field over its own floating label`,
+  ].filter(Boolean);
+  if (why.length) add('overlap', 'info', `set aside as by design: ${why.join('; ')}`);
+}
+
 /** `faithful audit --stress`: what each pass does to the page, as the finding will say it. */
 export const STRESS_CAUSE = {
   expand: 'with text 1.3–2× longer, as in translation',
   rtl: 'in right-to-left',
   spacing: 'with WCAG 1.4.12 text spacing',
-  zoom: 'with text at 200% (WCAG 1.4.4)',
+  zoom: 'with text alone at 200%',
   reflow: 'at 320px wide (WCAG 1.4.10 reflow)',
 } as const;
 export type StressMode = keyof typeof STRESS_CAUSE;
@@ -839,7 +935,14 @@ export function stressDelta(normal: ScreenResult, stressed: ScreenResult, mode: 
   const known = new Set(normal.findings.map(key));
   const findings = stressed.findings
     .filter((f) => STRESS_KINDS.has(f.kind) && !known.has(key(f)))
-    .map((f) => ({ ...f, detail: `${STRESS_CAUSE[mode]}: ${f.detail}` }));
+    .map((f) => ({
+      ...f,
+      // Text enlarged alone, the layout held, is harsher than WCAG 1.4.4 asks (page zoom meets
+      // it, and page zoom reflows): a robustness warning, never a conformance failure. Reflow at
+      // 320px IS the 1.4.10 test, so it keeps its severity.
+      ...(mode === 'zoom' && f.severity === 'error' ? { severity: 'warn' as const } : {}),
+      detail: `${STRESS_CAUSE[mode]}: ${f.detail}`,
+    }));
   const errors = findings.filter((x) => x.severity === 'error').length;
   const warns = findings.filter((x) => x.severity === 'warn').length;
   return { ...stressed, findings, score: Math.max(0, 100 - errors * 10 - warns * 3) };

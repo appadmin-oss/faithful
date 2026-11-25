@@ -127,8 +127,8 @@ describe('faithful-mcp over stdio', () => {
         name: 'faithful_audit',
         arguments: { target: 'spacing.html', viewports: '800x600' },
       });
-      expect(plain.result.content[0].text).toMatch(/^faithful FAIL 1E 0W/);
-      expect(plain.result.content[0].text).toMatch(/clipped: with text at 200% \(WCAG 1\.4\.4\)/);
+      expect(plain.result.content[0].text).toMatch(/^faithful PASS 0E 1W/);
+      expect(plain.result.content[0].text).toMatch(/W clipped: with text alone at 200%/);
       const spaced = await c.call('tools/call', {
         name: 'faithful_audit',
         arguments: { target: 'spacing.html', viewports: '800x600', stress: ['spacing'] },

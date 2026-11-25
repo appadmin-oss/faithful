@@ -70,6 +70,56 @@ export function auditProbe(): AuditFacts {
     const r = e.getBoundingClientRect();
     return r.width <= 2 || r.height <= 2;
   };
+  /*
+   * Why a layout fault may not be what it looks like, decided from the page's own structure,
+   * never dropped silently: the audit says what it is and judges it as that.
+   *   hidden      not on screen now (opacity ~0, inert, clipped to nothing as visually-hidden text)
+   *   decorative  a picture of UI: inside role=img/presentation, or a box that takes no pointer
+   *               and holds no control, or one its author named an illustration or mockup
+   *   marquee     a clipping window whose text repeats or moves forever (it stands still,
+   *               cut off, for a reader who asked for less motion)
+   *   stacked     the lower text is behind an opaque layer (a deck, a carousel): occluded
+   *   layered     both texts belong to one heading, paragraph or control (layered type)
+   *   label       a field drawn over its own label (a floating label)
+   */
+  type Ctx = 'hidden' | 'decorative' | 'marquee' | 'stacked' | 'layered' | 'label';
+  const FOCUSABLE = 'a[href],button,input,select,textarea,[tabindex]:not([tabindex="-1"]),[contenteditable="true"]';
+  const isHiddenNow = (e: Element) => {
+    if (opacityOf(e) < 0.05 || e.closest('[inert]')) return true;
+    for (let c: Element | null = e; c && c !== document.body; c = c.parentElement) {
+      const st = cs(c);
+      if (/rect\(0(px)?,? 0(px)?|inset\(50%/.test(`${st.clip} ${st.clipPath}`)) return true;
+      const r = c.getBoundingClientRect();
+      if ((r.width <= 1 || r.height <= 1) && /(hidden|clip)/.test(st.overflow)) return true;
+    }
+    return false;
+  };
+  const decorativeOf = (e: Element): string | null => {
+    if (e.closest('[role="img"],[role="presentation"],[role="none"]')) return 'role=img';
+    for (let c: Element | null = e; c && c !== document.body; c = c.parentElement) {
+      if (cs(c).pointerEvents === 'none' && !c.querySelector(FOCUSABLE) && c.getBoundingClientRect().width > 40)
+        return 'pointer-events:none, no controls';
+      // A whole interface shrunk to fit (transform: scale(0.5) on a box of dozens of elements)
+      // is a picture of an app, however real its DOM.
+      const m = /^matrix\(([-\d.e]+), ([-\d.e]+), ([-\d.e]+), ([-\d.e]+)/.exec(cs(c).transform);
+      if (m) {
+        const sx = Math.hypot(Number(m[1]), Number(m[2]));
+        const sy = Math.hypot(Number(m[3]), Number(m[4]));
+        if (sx < 0.8 && sy < 0.8 && c.getElementsByTagName('*').length >= 30)
+          return `a whole interface scaled to ${Math.round(sx * 100)}%`;
+      }
+      if (/(^|[\s_-])(illustration|mockup|mock-up|artwork)/i.test(`${c.className}`)) return 'named an illustration';
+    }
+    return null;
+  };
+  // The same words twice, one over the other: a duplicated line for an effect (a gradient or
+  // outline copy laid over the real heading), not two texts colliding.
+  const sameWords = (x: string, y: string) => {
+    const n = (t: string) => t.replace(/\s+/g, ' ').trim().toLowerCase();
+    const [p, q] = [n(x), n(y)];
+    return p.length >= 6 && q.length >= 6 && (p.startsWith(q.slice(0, 12)) || q.startsWith(p.slice(0, 12)));
+  };
+  const blockOf = (e: Element) => e.closest('h1,h2,h3,h4,h5,h6,p,label,button,a,li,dt,dd,figcaption');
   // Any CSS colour a computed style can hold — rgb() with commas or spaces, but also oklch(),
   // lab(), color(display-p3 …) — as 8-bit sRGB. The modern spaces are drawn into a 1×1 canvas
   // and read back, so the browser itself does the conversion.
@@ -188,9 +238,29 @@ export function auditProbe(): AuditFacts {
     if (!victim) continue;
     const r = textRect(victim);
     const axis = cutY && r.bottom > box.bottom + 2 ? 'y' : 'x';
+    let ctx: Ctx | undefined;
+    const why = decorativeOf(victim) ?? undefined;
+    if (isHiddenNow(victim)) ctx = 'hidden';
+    else if (why) ctx = 'decorative';
+    else {
+      // A marquee: the window's text repeats (the track is doubled to loop) or a part of it
+      // animates forever, or its author named it one.
+      const said = leaves.filter((t) => e.contains(t)).map(ownText);
+      // A loop is drawn twice so it can scroll seamlessly: its opening words come round again.
+      const all = (e.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const head = all.slice(0, Math.min(24, Math.floor(all.length / 3)));
+      const doubled = head.length >= 8 && all.indexOf(head, head.length) > 0;
+      const loops = Array.from(e.querySelectorAll('*')).some(
+        (k) => cs(k).animationIterationCount === 'infinite' && cs(k).animationName !== 'none',
+      );
+      if (doubled || new Set(said).size < said.length * 0.75 || loops || /marquee|ticker/i.test(`${e.className}`))
+        ctx = 'marquee';
+    }
     clipped.push({
       sel: path(e),
       text: short(ownText(victim), 40),
+      ...(ctx ? { ctx } : {}),
+      ...(why ? { why } : {}),
       axis,
       ...(axis === 'x' && rtl ? { side: 'left' as const } : {}),
       by: Math.round(axis === 'y' ? r.bottom - box.bottom : overX(r)),
@@ -214,24 +284,64 @@ export function auditProbe(): AuditFacts {
     return out;
   };
   const rects = solid.map(glyphs);
+  const sy0 = window.scrollY;
   const overlaps: AuditFacts['overlaps'] = [];
-  const collide = (P: DOMRect[], Q: DOMRect[]) =>
-    P.some((A) =>
-      Q.some((B) => {
-        const w = Math.min(A.right, B.right) - Math.max(A.left, B.left);
-        const h = Math.min(A.bottom, B.bottom) - Math.max(A.top, B.top);
-        if (w <= 0 || h <= 0) return false;
+  // Where two texts first meet (the centre of the shared area), or null when they do not.
+  const collide = (P: DOMRect[], Q: DOMRect[]): { x: number; y: number } | null => {
+    for (const A of P)
+      for (const B of Q) {
+        const l = Math.max(A.left, B.left);
+        const t = Math.max(A.top, B.top);
+        const w = Math.min(A.right, B.right) - l;
+        const h = Math.min(A.bottom, B.bottom) - t;
+        if (w <= 0 || h <= 0) continue;
         const small = Math.min(A.width * A.height, B.width * B.height);
-        return w * h >= 0.25 * small && w * h >= 40;
-      }),
-    );
+        if (w * h >= 0.25 * small && w * h >= 40) return { x: l + w / 2, y: t + h / 2 };
+      }
+    return null;
+  };
   for (let i = 0; i < solid.length && overlaps.length < 12; i++) {
     for (let j = i + 1; j < solid.length; j++) {
       const a = solid[i] as Element,
         b = solid[j] as Element;
       if (a.contains(b) || b.contains(a)) continue;
-      if (!collide(rects[i] as DOMRect[], rects[j] as DOMRect[])) continue;
-      overlaps.push({ a: path(a), b: path(b), text: short(ownText(a), 30), other: short(ownText(b), 30) });
+      const at = collide(rects[i] as DOMRect[], rects[j] as DOMRect[]);
+      if (!at) continue;
+      let ctx: Ctx | undefined;
+      const why = decorativeOf(a) ?? decorativeOf(b) ?? undefined;
+      if (isHiddenNow(a) || isHiddenNow(b)) ctx = 'hidden';
+      else if (why) ctx = 'decorative';
+      else if ((blockOf(a) && blockOf(a) === blockOf(b)) || sameWords(ownText(a), ownText(b))) ctx = 'layered';
+      else {
+        // What is PAINTED where they meet: an opaque layer above the lower text, belonging to
+        // the upper one's side, means the lower is occluded, not drawn over. elementsFromPoint
+        // sees only the screen, so the point is scrolled into view first (and put back after).
+        const docY = at.y + window.scrollY;
+        if (at.y < 0 || at.y >= window.innerHeight) window.scrollTo(0, Math.max(0, docY - window.innerHeight / 2));
+        const stack = document.elementsFromPoint(at.x, docY - window.scrollY);
+        window.scrollTo(0, sy0);
+        const ia = stack.findIndex((x) => x === a || a.contains(x));
+        const ib = stack.findIndex((x) => x === b || b.contains(x));
+        const [top, low, il] = ia !== -1 && (ib === -1 || ia < ib) ? [a, b, ib] : [b, a, ia];
+        const between = il === -1 ? stack : stack.slice(0, il);
+        if (
+          between.some((x) => {
+            // The upper text's own box counts: its background is what hides the lower one.
+            if (x.contains(low) || (top.contains(x) && x !== top)) return false;
+            const bg = rgb(cs(x).backgroundColor);
+            return (bg && bg.a > 0.9) || x.tagName === 'IMG';
+          })
+        )
+          ctx = 'stacked';
+      }
+      overlaps.push({
+        a: path(a),
+        b: path(b),
+        text: short(ownText(a), 30),
+        other: short(ownText(b), 30),
+        ...(ctx ? { ctx } : {}),
+        ...(why ? { why } : {}),
+      });
       break;
     }
   }
@@ -253,7 +363,17 @@ export function auditProbe(): AuditFacts {
     ) {
       if (hit.getBoundingClientRect().width * hit.getBoundingClientRect().height < r.width * r.height) continue;
     }
-    covered.push({ sel: path(e), text: short(ownText(e), 30), by: path(hit) });
+    let ctx: Ctx | undefined;
+    const control = hit.closest('input,textarea,select') ?? hit.querySelector?.('input,textarea,select');
+    if ((blockOf(e) && blockOf(e) === blockOf(hit)) || sameWords(ownText(e), hit.textContent ?? '')) ctx = 'layered';
+    else if (
+      control &&
+      (e.closest('label') ||
+        (e.parentElement && (e.parentElement.contains(control) || e.parentElement.parentElement?.contains(control))))
+    )
+      ctx = 'label';
+    else if (decorativeOf(e)) ctx = 'decorative';
+    covered.push({ sel: path(e), text: short(ownText(e), 30), by: path(hit), ...(ctx ? { ctx } : {}) });
     if (covered.length >= 8) break;
   }
 
@@ -304,9 +424,23 @@ export function auditProbe(): AuditFacts {
     return n;
   };
   const small: { e: Element; r: DOMRect }[] = [];
+  const pictures: NonNullable<AuditFacts['pictures']> = [];
   for (const e of all) {
     if (!e.matches(TARGET)) continue;
-    if (!shown(e)) continue;
+    // Not on screen now (opacity 0, inert): nobody can aim at it, so its size is not a fault.
+    if (!shown(e) || isHiddenNow(e)) continue;
+    // A control inside a picture of UI is not a target anyone should aim at; that a keyboard
+    // can reach it at all is the fault, reported once per picture.
+    const pic = decorativeOf(e);
+    if (pic) {
+      let root: Element = e;
+      for (let c = e.parentElement; c && c !== document.body && decorativeOf(c); c = c.parentElement) root = c;
+      const key = path(root);
+      const had = pictures.find((x) => x.sel === key);
+      if (had) had.controls++;
+      else if (pictures.length < 6) pictures.push({ sel: key, why: pic, controls: 1 });
+      continue;
+    }
     // A link inside running text is exempt (WCAG 2.5.8 "inline"). Running text is the
     // parent's OWN words: a row of links has none, however much link text it holds.
     if (e.tagName === 'A' && cs(e).display === 'inline' && e.parentElement && proseAround(e.parentElement) > 20)
@@ -1002,6 +1136,7 @@ export function auditProbe(): AuditFacts {
     clipped,
     overlaps,
     covered,
+    pictures,
     brokenImages,
     invisible,
     paragraphs,

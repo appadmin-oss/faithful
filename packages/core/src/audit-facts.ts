@@ -1,4 +1,7 @@
 /** What `faithful audit` reads off a rendered page (measured in the page by @usefaithful/browser). */
+/** Why a layout fault may not be what it looks like (see audit-probe.ts). */
+export type LayoutContext = 'hidden' | 'decorative' | 'marquee' | 'stacked' | 'layered' | 'label';
+
 export interface AuditFacts {
   viewport: { width: number; height: number };
   /** The page's own address, for resolving links. */
@@ -12,11 +15,28 @@ export interface AuditFacts {
    */
   overflow: { sel: string; right: number; text: string }[];
   /** Text cut off by a box that hides its overflow; `side: 'left'` for right-to-left text. */
-  clipped: { sel: string; text: string; axis: 'x' | 'y'; by: number; side?: 'left' }[];
+  /**
+   * Text cut off by a box. `ctx` says when that is not what it looks like (audit-probe.ts,
+   * "Why a layout fault may not be what it looks like"); `why` is the evidence for `decorative`.
+   */
+  clipped: {
+    sel: string;
+    text: string;
+    axis: 'x' | 'y';
+    by: number;
+    side?: 'left';
+    ctx?: LayoutContext;
+    why?: string;
+  }[];
   /** Two pieces of text drawn on top of each other. */
-  overlaps: { a: string; b: string; text: string; other: string }[];
+  overlaps: { a: string; b: string; text: string; other: string; ctx?: LayoutContext; why?: string }[];
   /** Text in the first screen covered by something else (hit-testing its centre). */
-  covered: { sel: string; text: string; by: string }[];
+  covered: { sel: string; text: string; by: string; ctx?: LayoutContext }[];
+  /**
+   * Pictures of UI (decorative by structure) that hold controls a keyboard reaches: their
+   * controls are left out of the target check and reported here, once per picture.
+   */
+  pictures?: { sel: string; why: string; controls: number }[];
   brokenImages: { sel: string; src: string }[];
   /** Visible-sized text whose effective opacity is ~0: waiting for a script to reveal it. */
   invisible: { sel: string; text: string }[];

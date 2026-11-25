@@ -650,3 +650,50 @@ describe('consistency: the page as its own reference', () => {
     expect(kinds(clean({ palette: pal({ buttons: [btn(10), btn(10), btn(999), btn(999)] }) }))).toEqual([]);
   });
 });
+
+describe('one fault, said once', () => {
+  const f = (detail: string, severity: 'error' | 'warn' = 'error', buildId = '.a') => ({
+    kind: 'overlap' as const,
+    severity,
+    detail,
+    buildId,
+  });
+  const res = (findings: ReturnType<typeof f>[]) => ({ screen: 's', findings, score: 0, pass: false }) as never;
+
+  it('the same fault seen by two stress passes is one finding naming both', () => {
+    const r = [
+      res([f('with text alone at 200%: "A" is drawn over "B" (.b)', 'warn')]),
+      res([f('at 320px wide (WCAG 1.4.10 reflow): "A" is drawn over "B" (.b)')]),
+    ];
+    mergeViewports(r);
+    const all = r.flatMap((x: { findings: { detail: string; severity: string }[] }) => x.findings);
+    expect(all.map((x) => `${x.severity} ${x.detail}`)).toEqual([
+      'error with text alone at 200% and at 320px wide (WCAG 1.4.10 reflow): "A" is drawn over "B" (.b)',
+    ]);
+  });
+
+  it('text enlarged alone is a robustness warning, never a WCAG failure; reflow at 320px keeps its error', () => {
+    const cutAt = (id: string) => ({
+      ...f('"Save" is cut off by 9px (right edge of its box)', 'error', id),
+      kind: 'clipped' as const,
+    });
+    const base = res([]);
+    const zoom = stressDelta(base, res([cutAt('.z')]), 'zoom');
+    expect(zoom.findings.map((x) => `${x.severity} ${x.detail}`)).toEqual([
+      'warn with text alone at 200%: "Save" is cut off by 9px (right edge of its box)',
+    ]);
+    expect(stressDelta(base, res([cutAt('.z')]), 'reflow').findings[0]?.severity).toBe('error');
+  });
+
+  it('the same text cut off in three boxes of one screen is one fault ×3', () => {
+    const cut = (id: string) => ({
+      ...f(`"Read the story" is cut off by 88px (right edge of its box)`, 'error', id),
+      kind: 'clipped' as const,
+    });
+    const r = [res([cut('.s1'), cut('.s2'), cut('.s3')])];
+    mergeViewports(r);
+    expect((r[0] as { findings: { detail: string }[] }).findings.map((x) => x.detail)).toEqual([
+      '"Read the story" is cut off by 88px (right edge of its box) ×3',
+    ]);
+  });
+});

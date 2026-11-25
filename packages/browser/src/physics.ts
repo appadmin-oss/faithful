@@ -37,7 +37,16 @@ export function recordPhysics(): void {
   const watch = () => {
     try {
       new MutationObserver((ms) => {
-        for (const m of ms) if (m.target.nodeType === 1) candidates.add(m.target as Element);
+        for (const m of ms) {
+          if (m.target.nodeType !== 1) continue;
+          const el = m.target as Element;
+          candidates.add(el);
+          // The first write is where it starts: read it now, before the page's own next frame
+          // can move it again (a spring stepped in the same frame would otherwise be sampled
+          // already on its way, and every distance would read a step short).
+          if (!stopped && !tracks.has(el) && tracks.size < MAX_TRACKS && el.isConnected)
+            tracks.set(el, [[Math.round(performance.now() - t0), ...read(el)]]);
+        }
       }).observe(document, { attributes: true, attributeFilter: ['style'], subtree: true });
     } catch {
       /* no document yet: the frame loop still finds declared animations */
