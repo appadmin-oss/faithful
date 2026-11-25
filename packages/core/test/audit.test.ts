@@ -449,6 +449,21 @@ describe('navigation logic (MAM Academy, Nov 2026)', () => {
     expect(r[0]?.detail).toMatch(/2 names \("Marking", "Grade entry"\)/);
   });
 
+  it('a console routing by ?v= has a screen per value; a tracking parameter does not make a new one', () => {
+    const routed = page([
+      nav([e('Dashboard', '/admin/console.php?v=dashboard'), e('Admissions', '/admin/console.php?v=admissions')]),
+    ]);
+    expect(scoreAudit(routed, 's').findings.filter((x) => x.kind === 'navigation')).toEqual([]);
+    const tracked = page([
+      nav([e('Pricing', '/pricing?utm_source=nav'), e('Plans', '/pricing?ref=footer'), e('Learn', '/learn')]),
+    ]);
+    expect(
+      scoreAudit(tracked, 's')
+        .findings.filter((x) => x.kind === 'navigation')
+        .map((x) => x.detail),
+    ).toEqual([expect.stringMatching(/2 names \("Pricing", "Plans"\)/)]);
+  });
+
   it('the same name twice (a header and a phone menu), a logo and a badge count are not duplicates', () => {
     const f = page(
       [

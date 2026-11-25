@@ -780,7 +780,12 @@ function navDest(href: string | undefined, base: string): string {
     const u = new URL(href, base || 'http://x/');
     if (!/^(https?|file):$/.test(u.protocol)) return '';
     const path = u.pathname.replace(/\/(index\.\w+)?$/, '') || '/';
-    const screen = [...u.searchParams].filter(([k]) => /^(tab|page|view|screen|section)$/i.test(k));
+    // Every query parameter is part of where a link goes (an app routing by ?v=dashboard has a
+    // screen per value: MAM Academy's console read as one screen under 16 names), except the ones
+    // that only say where the click came from.
+    const screen = [...u.searchParams]
+      .filter(([k]) => !/^(utm_\w+|gclid|fbclid|msclkid|mc_cid|mc_eid|ref|source|_ga|_gl)$/i.test(k))
+      .sort(([a], [b]) => a.localeCompare(b));
     const dest = `${u.host}${path}${screen.length ? `?${screen.map(([k, v]) => `${k}=${v}`).join('&')}` : ''}${u.hash}`;
     return path === '/' && !u.hash && !screen.length ? '' : dest;
   } catch {

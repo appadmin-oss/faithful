@@ -796,3 +796,20 @@ describe('content laid out but never painted', () => {
     expect(await errors(' open')).toEqual([]);
   }, 60_000);
 });
+
+describe('things that look like a fault and are not', () => {
+  it('a skip link is not a button shape; a table stacked as cards on a phone is not cards in cards', async () => {
+    const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rows</title><style>
+body{font:16px/1.5 Georgia;margin:0}main{padding:20px}.skip{position:absolute;left:-9999px;background:#000;color:#fff;padding:8px}
+.btn{display:inline-block;background:#0b4f8a;color:#fff;padding:12px 16px;border-radius:8px;text-decoration:none;min-height:44px;box-sizing:border-box}
+.card{border:1px solid #ccc;border-radius:12px;padding:16px;background:#fff;box-shadow:0 1px 2px #0001}
+table,tbody,tr,td{display:block;width:auto}tr{border:1px solid #ccc;border-radius:12px;padding:12px;margin:0 0 12px;background:#fff}</style></head>
+<body><a class="skip" href="#m">Skip to the screen</a><main id="m"><h1>Rows</h1><a class="btn" href="/a">Open</a> <a class="btn" href="/b">Export</a> <a class="btn" href="/c">Print</a>
+<div class="card"><table><tbody><tr><td>Ada</td><td>Active</td></tr><tr><td>Ben</td><td>Waiting</td></tr><tr><td>Chi</td><td>Active</td></tr></tbody></table></div></main></body></html>`;
+    const f = scoreAudit(
+      await r.audit({ html, baseDir: FIX }, { width: 390, height: 844 }, { axe: false }),
+      's',
+    ).findings;
+    expect(f.filter((x) => /shaped differently|cards nested in cards/.test(x.detail)).map((x) => x.detail)).toEqual([]);
+  }, 60_000);
+});

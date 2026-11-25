@@ -621,8 +621,11 @@ export function auditProbe(): AuditFacts {
     const r = e.getBoundingClientRect();
     if (rad > 0 && rad < r.height / 2 - 1 && ((bg && bg.a > 0.05) || bw >= 1))
       tally(radiusUse, String(Math.round(rad)));
+    // A skip link waits off screen until it is focused: its shape is not a button style.
+    const offscreen = r.right <= 0 || r.bottom + window.scrollY <= 0 || /^skip\b/i.test((e.textContent ?? '').trim());
     if (
       e.matches('button,a[href],[role=button],input[type=submit]') &&
+      !offscreen &&
       bg &&
       bg.a > 0.5 &&
       r.height >= 24 &&
@@ -1058,8 +1061,9 @@ export function auditProbe(): AuditFacts {
     return (hasBg || hasBorder || hasShadow) && r.width >= 120 && r.height >= 60;
   };
   const cards = all.filter((e) => shown(e) && isCard(e));
+  // A table's rows drawn as cards on a phone (a stacked table) are data, not decoration.
   const nestedCards = cards
-    .filter((c) => cards.some((o) => o !== c && o.contains(c)))
+    .filter((c) => !c.closest('table') && cards.some((o) => o !== c && o.contains(c)))
     .slice(0, 8)
     .map(path);
   const gradientText = all
