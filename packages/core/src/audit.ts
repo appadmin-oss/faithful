@@ -919,7 +919,7 @@ function layoutFindings(f: AuditFacts, add: (k: Kind, s: Severity, d: string, se
     else add('overlap', 'error', `"${o.text}" is drawn over "${o.other}" (${o.b})`, o.a);
   }
   for (const c of f.covered) {
-    if (c.ctx === 'layered' || c.ctx === 'label') bydesign[c.ctx]++;
+    if (c.ctx === 'layered' || c.ctx === 'label' || c.ctx === 'stacked') bydesign[c.ctx]++;
     else if (c.ctx === 'decorative') decorative.push({ text: c.text, sel: c.sel });
     else add('overlap', 'warn', `"${c.text}" is covered by ${c.by}`, c.sel);
   }

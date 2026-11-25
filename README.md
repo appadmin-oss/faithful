@@ -60,8 +60,10 @@ field points at, `<details>`, empty states and legal notices are never counted
 (`docs/research/narration-and-physics-2026-11.md`). Elements that keep moving when the reader
 asked for less motion are reported too.
 
-Every audit also renders each page **with text at 200%** (WCAG 1.4.4) and **at 320px wide**
-(WCAG 1.4.10), reporting only the clipped text, overlaps and sideways scroll each adds: a menu
+Every audit also renders each page **with text alone at 200%** (as Android font scale and iOS
+text size do; a robustness warning, since WCAG 1.4.4 is met by page zoom) and **at 320px
+wide** (WCAG 1.4.10, an error), reporting only the clipped text, overlaps and sideways scroll
+each adds, once even when both passes see it: a menu
 that fits at the author's size and cuts off its last item for a reader with larger text is
 the fault no screenshot shows. `--stress` adds more passes — `expand` (every string
 pseudo-localised to a translation's length, 1.3–2×), `rtl`, `spacing` (WCAG 1.4.12) — and
@@ -170,6 +172,17 @@ page and needs no `--screen`.
 - **Size, type and colour**: font family (the face that actually rendered, not the one the CSS
   asked for), size, weight, line height, letter spacing; text and background colour by
   CIEDE2000; borders and radii.
+- **Design sense, with no design file**: the page's own system is fitted, never imposed: a
+  modular type scale (base · rⁿ) and a spacing grid (8 with its 4px half-step, 6, 5, 4), each
+  claimed only when it beats chance (binomial test), and left edges four or more elements
+  share. A value that misses the system by a little is named with the value to use ("13px
+  spacing is off the 8px grid: use 12px or 16px"; "starts 3px right of the edge 9 elements
+  share"); a heading drawn larger than the level above it is named; one note states the
+  system so an agent adding to the page uses its numbers.
+- **Layout faults judged by what they are**: text cut off or overlapping inside a picture of
+  UI is not a layout error, but a screen reader reading it and a keyboard tabbing into it is,
+  once per picture; a frozen marquee, content hidden right now, a stacked deck, a heading over
+  a copy of itself and a floating label are each said for what they are.
 - **Motion, as declared**: each element's transitions and animations, CSS and scripted —
   which properties move, for how long, along which curve, after which delay, how many times. A
   design that moves where the build is still is an error.
@@ -183,6 +196,33 @@ page and needs no `--screen`.
   12px button.
 
 Findings come back root-cause first: missing, copy and size before the positions they move.
+
+## How accurate it is
+
+A verifier is worth what its verdicts are worth, in both directions. Two measures, both
+reproducible:
+
+**Live sites** (25 Nov 2026, `faithful audit <url>`, every pass on). Errors before and after
+judging each layout fault by what it is (a picture of UI, a frozen marquee, an inactive slide,
+a stacked deck, a layered heading, a floating label):
+
+| Site | Errors before | Errors now | What remains |
+|---|---|---|---|
+| GOV.UK | 1 | **0** (pass) | — |
+| Stripe | 20 | **1** | an axe rule: visible label text missing from the accessible name (×7) |
+| Linear | 45 | **5** | a React hydration error, an unnamed button, a scroll region with no keyboard access, and (on the run that day) a missing title and lang |
+| GitHub | 21 | **3** | a real sideways scroll at 320px; two overlaps in its trending cards, not yet confirmed either way |
+
+Live pages change between runs; the counts are a measurement on that day, not a fixture.
+
+**Labelled set** (`pnpm bench`, `fixtures/bench/`): known-good pages built from the very
+patterns that caused the false alarms above, and pages with one planted fault each. **13 of
+13 planted faults found, 0 false alarms, 5 of 5 known-good pages clean.** It runs in the test
+suite and fails the build below 100% recall or 90% precision. Read it for what it is: the
+same hands wrote the fixtures and the fixes, so it is a regression guard, not an independent
+benchmark. Text enlarged *alone* to 200% (Android font scale, iOS text size) goes beyond
+WCAG; those warnings are counted apart (3 on the known-good pages: a long word in a large
+heading wider than a phone, fixed by `overflow-wrap: anywhere`).
 
 ## For agents
 

@@ -169,7 +169,9 @@ export function nearMissEdges(edges: Edge[]): { sel: string; x: number; to: numb
       if (d < 1.5 || d > 4) continue;
       // A line that is itself well used is a column of its own, not a slip.
       if ((byX.get(Math.round(e.x))?.length ?? 0) >= 3) continue;
-      if (e.y + e.h < top || e.y > bottom) continue;
+      // In the column's band: from just above its first member to just below its last (a slip
+      // is often the paragraph right after a column; a footer far down is another band).
+      if (e.y + e.h < top - 240 || e.y > bottom + 240) continue;
       used.add(e);
       out.push({ sel: e.sel, x: Math.round(e.x), to: x, shared: members.length, by: Math.round(d) });
     }

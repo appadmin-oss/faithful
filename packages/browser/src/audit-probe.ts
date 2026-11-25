@@ -373,6 +373,27 @@ export function auditProbe(): AuditFacts {
     )
       ctx = 'label';
     else if (decorativeOf(e)) ctx = 'decorative';
+    else {
+      // A deck: the covering item and the covered one are siblings of one list of repeated
+      // items (same tag and class under one parent), layered in place, not pinned to the
+      // screen. A fixed or sticky layer over text (a banner) stays a fault.
+      const item = (x: Element) => {
+        for (let c: Element | null = x; c?.parentElement; c = c.parentElement) {
+          const p = c.parentElement as Element;
+          const twins = Array.from(p.children).filter((k) => k.tagName === c?.tagName && k.className === c?.className);
+          if (twins.length >= 2 && c.contains(x)) return c;
+          if (c.contains(hit) && c.contains(e)) return null;
+        }
+        return null;
+      };
+      const ie = item(e);
+      const ih = item(hit);
+      const pinned = (x: Element) => {
+        for (let c: Element | null = x; c; c = c.parentElement) if (/fixed|sticky/.test(cs(c).position)) return true;
+        return false;
+      };
+      if (ie && ih && ie !== ih && ie.parentElement === ih.parentElement && !pinned(hit)) ctx = 'stacked';
+    }
     covered.push({ sel: path(e), text: short(ownText(e), 30), by: path(hit), ...(ctx ? { ctx } : {}) });
     if (covered.length >= 8) break;
   }
@@ -386,7 +407,9 @@ export function auditProbe(): AuditFacts {
     .filter((e) => ownText(e).length > 2 && cs(e).display !== 'none' && cs(e).visibility === 'visible')
     .filter((e) => {
       const r = e.getBoundingClientRect();
-      return r.width > 4 && r.height > 4 && opacityOf(e) < 0.05;
+      // Inert content (a slide not showing, a closed drawer) is hidden by the page's own
+      // declaration, not waiting on a script that may never run.
+      return r.width > 4 && r.height > 4 && opacityOf(e) < 0.05 && !e.closest('[inert]');
     })
     .slice(0, 50)
     .map((e) => ({ sel: path(e), text: short(ownText(e), 40) }));

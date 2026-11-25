@@ -15,7 +15,8 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "selftest": "node packages/cli/dist/bin.js selftest",
-    "check": "pnpm lint && pnpm build && pnpm test && pnpm selftest"
+    "check": "pnpm lint && pnpm build && pnpm test && pnpm selftest",
+    "bench": "node scripts/bench.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.8",

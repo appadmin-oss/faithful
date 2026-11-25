@@ -650,7 +650,9 @@ describe('a layout fault judged by what it is', () => {
     );
     const stacked = said(await audit(TWO, `${PAIR}.pair p{background:#fff;padding:8px}`));
     expect(stacked.filter((x) => /^error overlap/.test(x))).toEqual([]);
-    expect(stacked).toContainEqual('info overlap set aside as by design: 1 under an opaque card (a stack or deck)');
+    expect(stacked).toContainEqual(
+      expect.stringMatching(/^info overlap set aside as by design: \d+ under an opaque card \(a stack or deck\)$/),
+    );
   }, 60_000);
 
   it('text in a picture of UI is not a layout error; that a screen reader and a keyboard reach it is', async () => {

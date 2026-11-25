@@ -200,3 +200,12 @@ describe('a token list is not forced into a ratio', () => {
     ).toBeNull();
   });
 });
+
+describe('the band of a column', () => {
+  it('the paragraph right after a column, 3px in, is a slip of that column', () => {
+    const col = Array.from({ length: 6 }, (_, i) => ({ x: 24, y: i * 50, h: 30, sel: `p:nth-of-type(${i + 1})` }));
+    expect(nearMissEdges([...col, { x: 27, y: 320, h: 30, sel: 'p.slip' }])).toEqual([
+      { sel: 'p.slip', x: 27, to: 24, shared: 6, by: 3 },
+    ]);
+  });
+});

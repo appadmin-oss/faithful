@@ -1,0 +1,47 @@
+{
+  "about": "Faithful's labelled audit benchmark. Each page is known-good (expect nothing at warning or above) or carries planted faults of the kinds listed. A finding at warning or above whose kind is not expected is a false alarm; an expected kind not found is a miss. Known-good pages are built from the real patterns that caused false alarms on GOV.UK, Stripe, Linear and GitHub (Nov 2026).",
+  "pages": {
+    "good-service.html": [],
+    "good-carousel.html": [],
+    "good-marquee.html": [],
+    "good-deck.html": [],
+    "good-hero.html": [],
+    "bad-clipped.html": [
+      "clipped"
+    ],
+    "bad-overlap.html": [
+      "overlap"
+    ],
+    "bad-overflow.html": [
+      "overflow"
+    ],
+    "bad-contrast.html": [
+      "contrast"
+    ],
+    "bad-targets.html": [
+      "target"
+    ],
+    "bad-a11y.html": [
+      "a11y"
+    ],
+    "bad-narration.html": [
+      "wording"
+    ],
+    "bad-system.html": [
+      "heading",
+      "consistency"
+    ],
+    "bad-dead.html": [
+      "dead"
+    ],
+    "bad-motion.html": [
+      "motion"
+    ],
+    "bad-placeholder.html": [
+      "placeholder"
+    ],
+    "bad-picture.html": [
+      "a11y"
+    ]
+  }
+}

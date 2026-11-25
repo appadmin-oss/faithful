@@ -8,7 +8,7 @@ what to do next, in order.
 
 - **Code:** `main` on GitHub at [appadmin-oss/faithful](https://github.com/appadmin-oss/faithful).
   Apache-2.0, copyright 2026 Afrovanguard (`LICENSE`, `NOTICE`).
-- **Health:** `pnpm install && pnpm check` → lint clean, build, 325 tests, selftest — all green.
+- **Health:** `pnpm install && pnpm check` → lint clean, build, 352 tests (the labelled benchmark among them), selftest — all green.
   Node 22.12+ and any Chromium (`node packages/cli/dist/bin.js doctor` says which it found).
 - **npm scope: `@usefaithful`** (24 Nov 2026). `@faithful` belongs to someone else (it holds
   `table-filter-sortt`). Every package is `@usefaithful/*`; the command is
@@ -71,7 +71,25 @@ Done 25 Nov 2026 (`docs/research/narration-and-physics-2026-11.md`):
   heading echoes, templated card blurbs, sign-offs. GOV.UK-style negatives in the tests; three
   live GOV.UK pages clean.
 
-Next: hover/press/scroll motion (the recorder watches entry only), cross-viewport layout
+Done 25 Nov 2026, from an audit against dev standards and four live sites (owner: "make
+faithful smarter, mathematical and creative"):
+
+- **Precision** (`audit-probe.ts` "Why a layout fault may not be what it looks like",
+  `audit.ts` `layoutFindings`): live errors GOV.UK 1→0, Stripe 20→1, Linear 45→5,
+  GitHub 21→3. Contexts: hidden, decorative (role=img, pointer-events:none with no controls,
+  an interface scaled below 80%, an author's "illustration"), marquee, stacked (by what is
+  painted, scrolled into view; or repeated sibling items for a cover), layered, label.
+  Text alone at 200% is a warning; one fault in several passes or boxes is said once.
+  Known limit: a FULL-SIZE app embedded as a picture (Linear at 1440) has no structural
+  signal and is judged as UI, which is what a screen reader meets.
+- **Design sense** (`core/design-sense.ts`): type scale, spacing grid, edge slips, heading
+  order; binomial significance so a fit is not chance; fixes are the page's own values.
+- **Benchmark** (`scripts/bench.mjs`, `fixtures/bench/`, `pnpm bench`, and a test): 13/13,
+  0 false alarms, 5/5 clean. A regression guard written by the same hands, not independent.
+- **Physics**: the recorder now reads an element at its first style write.
+
+Next: an independent labelled set (Krebs' ai-design-checker, 165 sites, MIT); hover/press/
+scroll motion (the recorder watches entry only), cross-viewport layout
 consistency (ReDeCheck), keyboard/focus pass, site crawl, `faithful approve`, a published
 precision/recall benchmark — in the order ranked at the end of that research file.
 
