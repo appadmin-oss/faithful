@@ -277,3 +277,36 @@ ${touchRule ? '@media (hover: none){.tap{display:block}.hover{display:none}}' : 
     expect(run(d, 'audit', 'old.html', '--viewports', '1440x900', '--stress', 'none').out).not.toMatch(/viewport/);
   }, 180_000);
 });
+
+describe('motion, as the design specifies it', () => {
+  const page = (
+    panel: string,
+    badge: string,
+  ) => `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Studio</title><style>
+body{margin:0;font:16px/1.5 Georgia;color:#10292c;background:#fbf7ef}main{padding:24px}
+.panel{width:320px;padding:16px;background:#fff;${panel}}
+.badge{display:inline-block;padding:4px 10px;background:#10292c;color:#fff;${badge}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}</style></head><body><main><h1>Studio</h1>
+<div class="panel"><p>Lessons this week.</p></div><span class="badge">Live now</span></main></body></html>`;
+  const design = page('transition:transform 300ms cubic-bezier(0.2,0,0,1)', 'animation:pulse 2s ease-in-out infinite');
+
+  it('the same motion passes; a faster, linear panel and a badge that pulses once are named; a still build is named', () => {
+    const d = tmp();
+    writeFileSync(join(d, 'design.html'), design);
+    writeFileSync(
+      join(d, 'same.html'),
+      page('transition:transform 320ms cubic-bezier(0.2,0,0,1)', 'animation:pulse 2s ease-in-out infinite'),
+    );
+    writeFileSync(join(d, 'off.html'), page('transition:transform 150ms linear', 'animation:pulse 2s ease-in-out 1'));
+    writeFileSync(join(d, 'still.html'), page('', ''));
+    const vp = ['--viewports', '1280x800'];
+    expect(run(d, 'verify', 'design.html', '--build', 'same.html', ...vp).code).toBe(0);
+    const off = run(d, 'verify', 'design.html', '--build', 'off.html', ...vp, '--max', '20');
+    expect(off.out).toMatch(/W motion: transform transition: 300ms → 150ms, cubic-bezier\(0\.2, 0, 0, 1\) → linear/);
+    expect(off.out).toMatch(/W motion: animation of transform: ×infinite → ×1/);
+    const still = run(d, 'verify', 'design.html', '--build', 'still.html', ...vp, '--max', '20');
+    expect(still.code).toBe(1);
+    expect(still.out).toMatch(/E motion: the design moves transform 300ms/);
+    expect(still.out).toMatch(/the design animates \(pulse 2000ms ease-in-out ×infinite\); the build is still/);
+  }, 180_000);
+});

@@ -546,3 +546,29 @@ describe('consistency, measured on a real page', () => {
     ]);
   }, 60_000);
 });
+
+describe('motion the reader asked to be spared (prefers-reduced-motion)', () => {
+  const page = (css: string) =>
+    `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>News</title><style>body{font:16px/1.5 Georgia;margin:20px;color:#111;background:#fff}
+@keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}@keyframes fade{from{opacity:0}to{opacity:1}}${css}</style></head>
+<body><main><h1>News</h1><div class="ticker">Open day on Saturday · New term starts in January</div></main></body></html>`;
+  const motion = async (css: string) =>
+    scoreAudit(await r.audit({ html: page(css), baseDir: FIX }, { width: 1440, height: 900 }, {}), 's').findings.filter(
+      (x) => x.kind === 'motion',
+    );
+
+  it('an endless sliding ticker that ignores the setting is reported; the same ticker switched off is not; a fade is not', async () => {
+    const loose = await motion('.ticker{animation:slide 12s linear infinite}');
+    expect(loose.map((x) => x.detail)).toEqual([
+      expect.stringMatching(
+        /^1 element still moves when the reader has asked for less motion \(prefers-reduced-motion\): main>div\.ticker \(slide 12000ms, forever\)$/,
+      ),
+    ]);
+    expect(
+      await motion(
+        '.ticker{animation:slide 12s linear infinite}@media (prefers-reduced-motion: reduce){.ticker{animation:none}}',
+      ),
+    ).toEqual([]);
+    expect(await motion('.ticker{animation:fade .4s ease-out}')).toEqual([]);
+  }, 60_000);
+});

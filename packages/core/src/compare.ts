@@ -13,6 +13,7 @@ import type { FaithfulConfig } from './config.js';
 import type { Finding, Kind, Severity } from './findings.js';
 import { area, containment, fmtBox, median } from './geometry.js';
 import { matchElements, type Pair } from './match.js';
+import { motionDiff } from './motion.js';
 import { compareCopy, snippet } from './text.js';
 
 export interface Tally {
@@ -423,6 +424,9 @@ export function compareScreens(design: Screen, build: Screen, cfg: FaithfulConfi
         });
     }
     compareStyle(p, T, color, style, add, better ? new Set<Kind>(['color', 'background']) : undefined);
+    // Motion, when both sides were read for it (a Figma import says nothing, which is not "still").
+    if (design.motionRead && build.motionRead)
+      for (const m of motionDiff(p.d.style?.motion, p.b.style?.motion)) add('motion', m.severity, m.detail, p.d, p.b);
   }
 
   // ---- Touch targets, on everything the build makes interactive -------------------------

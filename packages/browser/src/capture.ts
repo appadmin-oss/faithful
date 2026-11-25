@@ -14,6 +14,7 @@ import { auditProbe } from './audit-probe.js';
 import { AXE_TAGS, axeSource, runAxe } from './axe.js';
 import { extractPage, type RawPage } from './extract.js';
 import { chromeCandidates } from './find-chrome.js';
+import { type MotionReading, stampMotion } from './motion.js';
 import { expandText, setRtl, setSpacing, zoomText } from './stress.js';
 
 /**
@@ -53,6 +54,8 @@ export interface CaptureOptions {
   scrollY?: number;
   /** A deployed page rather than a design board: a phone honours (or lacks) its viewport meta. */
   asPage?: boolean;
+  /** Read each element's declared motion (on by default). */
+  motion?: boolean;
 }
 
 const FREEZE = `*,*::before,*::after{animation-duration:0s!important;animation-delay:0s!important;transition:none!important;caret-color:transparent!important;scroll-behavior:auto!important}`;
@@ -170,6 +173,7 @@ export class Renderer {
       await this.load(page, target, timeout);
       await this.settle(page, target, timeout);
       if (opts.scrollY) await this.scrolled(page, target, opts.scrollY, timeout);
+      if (opts.motion !== false) await this.readMotion(page, timeout, true);
       const raw: RawPage = await within(
         inWorld<RawPage>(page, extractPage, { ignore: opts.ignore ?? [], max: opts.maxElements ?? 4000 }),
         timeout,
@@ -258,7 +262,10 @@ export class Renderer {
           'waiting for layout',
         );
       }
+      // What still moves for a reader who asked for less motion (the context is `reduce`).
+      const stillMoving = opts.stress ? null : await this.readMotion(page, timeout, false, 'reduce').catch(() => null);
       const facts: AuditFacts = await within(inWorld<AuditFacts>(page, auditProbe), timeout, 'measuring the page');
+      if (stillMoving) facts.reducedMotion = stillMoving.moving;
       if (opts.screenshot)
         await page.screenshot({ path: opts.screenshot, fullPage: true, animations: 'disabled', caret: 'hide' });
       // Last, after the probe and the screenshot, so nothing axe touches can change them. A stress
@@ -302,6 +309,25 @@ export class Renderer {
     );
     await page.waitForTimeout(250);
     await this.settle(page, target, timeout);
+  }
+
+  /**
+   * The page's declared motion, as a reader who has NOT asked for reduced motion gets it: the
+   * preference is lifted for the read and put back (every render is otherwise reduced, for
+   * stable geometry). `stamp` marks each moving element for the extractor.
+   */
+  private async readMotion(
+    page: Page,
+    timeout: number,
+    stamp: boolean,
+    reducedMotion: 'no-preference' | 'reduce' = 'no-preference',
+  ): Promise<{ n: number; moving: { sel: string; reading: MotionReading }[] }> {
+    if (reducedMotion === 'no-preference') await page.emulateMedia({ reducedMotion: 'no-preference' });
+    try {
+      return await within(inWorld(page, stampMotion, { freeze: FREEZE, stamp }), timeout, 'reading motion');
+    } finally {
+      if (reducedMotion === 'no-preference') await page.emulateMedia({ reducedMotion: 'reduce' });
+    }
   }
 
   private async settle(page: Page, target: RenderTarget, timeout: number): Promise<void> {
@@ -473,6 +499,22 @@ export function toScreen(raw: RawPage, viewport: Viewport, screenId: string): Sc
     set('borderWidth', num(s.borderWidth));
     set('opacity', num(s.opacity));
     set('renderedFont', str(s.renderedFont));
+    if (typeof s.motion === 'string') {
+      try {
+        const m = JSON.parse(s.motion) as MotionReading;
+        const track = (t: MotionReading['t'][number]) => ({
+          property: t.p,
+          duration: t.d,
+          delay: t.l,
+          easing: t.e,
+          ...(t.i !== undefined ? { iterations: t.i } : {}),
+          ...(t.k ? { keyframes: t.k.split(',') } : {}),
+        });
+        style.motion = { transitions: m.t.map(track), animations: m.a.map(track), scripted: m.s.map(track) };
+      } catch {
+        /* a reading the page tampered with is no reading */
+      }
+    }
     const e: DesignElement = { id: r.id, kind: r.kind, box: r.box, style };
     if (r.text !== undefined) e.text = r.text;
     if (r.role !== undefined) e.role = r.role;
@@ -483,5 +525,6 @@ export function toScreen(raw: RawPage, viewport: Viewport, screenId: string): Sc
   const regions: Region[] = raw.regions.map((g) => ({ id: g.id, name: g.name, box: g.box }));
   const screen: Screen = { id: screenId, name: screenId, viewport, elements, regions, pageHeight: raw.pageHeight };
   if (raw.fontFaces.length) screen.fontFaces = raw.fontFaces;
+  if (raw.motionRead) screen.motionRead = true;
   return screen;
 }

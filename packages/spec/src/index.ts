@@ -42,6 +42,28 @@ export interface ElementStyle {
    * not the family asked for, the design font failed to load and a fallback stood in.
    */
   renderedFont?: string;
+  /** How it moves, when the source says (a rendered page does; see `Screen.motionRead`). */
+  motion?: Motion;
+}
+
+/** One moving property (a transition), or one animation. Times in ms. */
+export interface MotionTrack {
+  /** The property a transition moves (`transform`, `all`…), or an animation's name. */
+  property: string;
+  duration: number;
+  delay: number;
+  /** A keyword, `cubic-bezier(…)`, `steps(…)` or `linear(…)`, as the browser reports it. */
+  easing: string;
+  /** Animations: how many times (`infinite`), and the properties its keyframes change. */
+  iterations?: string;
+  keyframes?: string[];
+}
+
+/** An element's motion: transitions, CSS animations, and animations a script started. */
+export interface Motion {
+  transitions: MotionTrack[];
+  animations: MotionTrack[];
+  scripted: MotionTrack[];
 }
 
 export interface DesignElement {
@@ -98,6 +120,11 @@ export interface Screen {
   pageHeight?: number;
   /** Families the page declares as web fonts (@font-face), so a failed load can be told apart. */
   fontFaces?: string[];
+  /**
+   * Motion was read for this screen: an element without `style.motion` is still. Absent when
+   * the source cannot say (a Figma import), and then motion is not compared at all.
+   */
+  motionRead?: boolean;
 }
 
 export type TokenType = 'color' | 'dimension' | 'fontFamily' | 'fontWeight' | 'number' | 'duration' | 'other';

@@ -34,6 +34,8 @@ export interface RawPage {
   fontsFailed: string[];
   /** Every family declared with @font-face. */
   fontFaces: string[];
+  /** Motion was read before extraction (each moving element carried its reading). */
+  motionRead?: boolean;
 }
 
 export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
@@ -332,6 +334,21 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
     return { id: cssPath(lm), name: name ?? lm.tagName.toLowerCase(), box: toBox(lm.getBoundingClientRect()) };
   });
 
+  // Motion stamped by stampMotion (motion.ts): attached to the element it belongs to, by path,
+  // then the stamps are removed so the page is left as it was found.
+  const stamped = Array.from(document.querySelectorAll('[data-faithful-motion]'));
+  const motionRead = document.documentElement.hasAttribute('data-faithful-motion-read');
+  if (stamped.length) {
+    const byId = new Map<string, string>();
+    for (const el of stamped) byId.set(cssPath(el), el.getAttribute('data-faithful-motion') ?? '');
+    for (const e of out) {
+      const m = byId.get(e.id);
+      if (m) e.style.motion = m;
+    }
+    for (const el of stamped) el.removeAttribute('data-faithful-motion');
+  }
+  document.documentElement.removeAttribute('data-faithful-motion-read');
+
   const failed: string[] = [];
   const faces: string[] = [];
   try {
@@ -351,5 +368,6 @@ export function extractPage(opts: { ignore: string[]; max: number }): RawPage {
     truncated: out.length >= opts.max,
     fontsFailed: [...new Set(failed)],
     fontFaces: [...new Set(faces)],
+    motionRead,
   };
 }

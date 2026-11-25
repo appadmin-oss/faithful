@@ -60,6 +60,19 @@ export interface AuditFacts {
    * Optional for older facts.
    */
   doc?: { title: string; description: string; viewportMeta?: boolean };
+  /**
+   * Every element that still moves with `prefers-reduced-motion: reduce` (the audit's own
+   * setting), with its transitions (`t`), CSS animations (`a`) and scripted ones (`s`). Filled by
+   * the renderer; absent in stress passes and in older facts.
+   */
+  reducedMotion?: {
+    sel: string;
+    reading: {
+      t: { p: string; d: number; e: string }[];
+      a: { p: string; d: number; e: string; i?: string; k?: string }[];
+      s: { p: string; d: number; e: string; i?: string; k?: string }[];
+    };
+  }[];
   /** The device the page was rendered as (filled by the renderer). */
   device?: 'phone' | 'tablet' | 'desktop';
   /** Every form: where it sends, how, and the names the server will read. */

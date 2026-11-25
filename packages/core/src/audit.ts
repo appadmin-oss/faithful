@@ -20,6 +20,7 @@ import type { AuditFacts } from './audit-facts.js';
 import { contrastRatio, deltaE, type Rgba, toHex } from './color.js';
 import type { ScreenResult } from './compare.js';
 import type { Finding, Kind, Severity } from './findings.js';
+import { MOVEMENT } from './motion.js';
 
 export type { AuditFacts, AxeFacts, AxeRule } from './audit-facts.js';
 
@@ -309,6 +310,9 @@ export function scoreAudit(f: AuditFacts, screen: string, o: AuditOptions = {}):
   // ── Consistency: with no design, the page is its own reference ──
   consistency(f, add);
 
+  // ── Motion the reader asked to be spared ──
+  reducedMotion(f, add);
+
   // ── Tells ─────────────────────────────────────────────────────────────────────────
   /*
    * Restraint, after MengTo's audit-ai-design-slop: never reject a technique in isolation. A
@@ -580,6 +584,33 @@ function consistency(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?:
     }
   }
   for (const d of out.slice(0, 4)) add('consistency', 'warn', d);
+}
+
+/**
+ * A reader who set `prefers-reduced-motion: reduce` (vestibular disorders, migraine, focus)
+ * gets a page that still MOVES: a transform or position animation, an endless loop, a moving
+ * transition. Fades are allowed — opacity and colour are not motion. Emulating the setting is
+ * not enough to pass: what the page did not gate keeps running (Edge's DevTools guide on
+ * reduced motion), so this reads what actually remains. WCAG 2.3.3; Apple HIG "Reduce Motion".
+ */
+function reducedMotion(f: AuditFacts, add: (k: Kind, s: Severity, d: string, sel?: string) => void): void {
+  const list = f.reducedMotion ?? [];
+  const moves = (k: string | undefined) => !!k && k.split(',').some((p) => MOVEMENT.test(p.trim()));
+  const offenders: { sel: string; what: string }[] = [];
+  for (const m of list) {
+    const anim = [...m.reading.a, ...m.reading.s].find((a) => moves(a.k) || a.i === 'infinite');
+    const trans = m.reading.t.find((t) => MOVEMENT.test(t.p) && t.p !== 'all' && t.d > 0);
+    if (anim) offenders.push({ sel: m.sel, what: `${anim.p} ${anim.d}ms${anim.i === 'infinite' ? ', forever' : ''}` });
+    else if (trans) offenders.push({ sel: m.sel, what: `${trans.p} transition ${trans.d}ms` });
+  }
+  if (!offenders.length) return;
+  const first = offenders[0] as { sel: string; what: string };
+  add(
+    'motion',
+    'warn',
+    `${offenders.length} element${offenders.length === 1 ? '' : 's'} still move${offenders.length === 1 ? 's' : ''} when the reader has asked for less motion (prefers-reduced-motion): ${first.sel} (${first.what})`,
+    first.sel,
+  );
 }
 
 /** A menu entry's name as a reader compares it: case, spacing, badges and counts aside. */
